@@ -8,7 +8,11 @@ interface RoomPageProps {
   };
 }
 
-const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN ?? 'sanctum';
+const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN;
+
+if (!DAILY_SUBDOMAIN) {
+  throw new Error('NEXT_PUBLIC_DAILY_SUBDOMAIN environment variable is required but not configured');
+}
 
 function buildDailyRoomUrl(roomName: string): string {
   return `https://${DAILY_SUBDOMAIN}.daily.co/${encodeURIComponent(roomName)}`;
@@ -38,12 +42,23 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
 
     const mediaQuery = window.matchMedia('(max-width: 768px), (pointer: coarse)');
-    mediaQuery.addEventListener('change', updateViewportMode);
+    
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateViewportMode);
+    } else if (typeof mediaQuery.addListener === 'function') {
+      // Fallback for older Safari/iOS where MediaQueryList uses addListener/removeListener
+      mediaQuery.addListener(updateViewportMode);
+    }
+
     window.addEventListener('resize', updateViewportMode);
     window.addEventListener('orientationchange', updateViewportMode);
 
     return () => {
-      mediaQuery.removeEventListener('change', updateViewportMode);
+      if (typeof mediaQuery.removeEventListener === 'function') {
+        mediaQuery.removeEventListener('change', updateViewportMode);
+      } else if (typeof mediaQuery.removeListener === 'function') {
+        mediaQuery.removeListener(updateViewportMode);
+      }
       window.removeEventListener('resize', updateViewportMode);
       window.removeEventListener('orientationchange', updateViewportMode);
     };
@@ -63,6 +78,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         title={`Daily room ${params.roomName}`}
         src={roomUrl}
         allow="camera; microphone; fullscreen; speaker-selection; display-capture"
+        allowFullScreen
         style={{
           position: 'absolute',
           top: 0,
