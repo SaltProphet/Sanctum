@@ -17,7 +17,7 @@ type BurnerRoom = {
 
 type CreatorAccount = {
   email: string;
-  password: string;
+  passwordHash: string;
   displayName: string;
   customSlug: string;
   slugChangeUsed: boolean;
@@ -28,6 +28,28 @@ type AuthMode = 'login' | 'register';
 
 const ACCOUNT_STORAGE_KEY = 'sanctum.creator.account';
 const SESSION_STORAGE_KEY = 'sanctum.creator.session';
+
+/**
+ * Simple hash function for password verification in demo/prototype environment.
+ * WARNING: This is NOT suitable for production. Passwords should never be stored
+ * on the client side. Use proper server-side authentication in production.
+ */
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Verify a password against its hash.
+ * WARNING: This is NOT suitable for production.
+ */
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  const passwordHash = await hashPassword(password);
+  return passwordHash === hash;
+}
 
 function toSlug(input: string): string {
   return input
@@ -54,7 +76,7 @@ function readStoredAccount(): CreatorAccount | null {
   try {
     const parsed = JSON.parse(rawAccount) as CreatorAccount;
 
-    if (!parsed.email || !parsed.password || !parsed.customSlug) {
+    if (!parsed.email || !parsed.passwordHash || !parsed.customSlug) {
       return null;
     }
 
@@ -186,22 +208,27 @@ export default function DashboardPage() {
         return;
       }
 
-      const nextAccount: CreatorAccount = {
-        displayName: registerName,
-        email: registerEmail.toLowerCase(),
-        password: registerPassword,
-        customSlug: slug,
-        slugChangeUsed: false,
-        rooms: [],
-      };
+      setIsLoading(true);
 
-      writeStoredAccount(nextAccount);
-      window.localStorage.setItem(SESSION_STORAGE_KEY, nextAccount.email);
+      hashPassword(registerPassword).then((passwordHash) => {
+        const nextAccount: CreatorAccount = {
+          displayName: registerName,
+          email: registerEmail.toLowerCase(),
+          passwordHash,
+          customSlug: slug,
+          slugChangeUsed: false,
+          rooms: [],
+        };
 
-      setAccount(nextAccount);
-      setSessionEmail(nextAccount.email);
-      setNewSlug(nextAccount.customSlug);
-      setAuthFeedback('Registration complete. Welcome to your dashboard.');
+        writeStoredAccount(nextAccount);
+        window.localStorage.setItem(SESSION_STORAGE_KEY, nextAccount.email);
+
+        setAccount(nextAccount);
+        setSessionEmail(nextAccount.email);
+        setNewSlug(nextAccount.customSlug);
+        setAuthFeedback('Registration complete. Welcome to your dashboard.');
+        setIsLoading(false);
+      });
     },
     [registerEmail, registerName, registerPassword, registerSlug],
   );
@@ -219,19 +246,27 @@ export default function DashboardPage() {
         return;
       }
 
-      if (
-        storedAccount.email !== loginEmail.toLowerCase() ||
-        storedAccount.password !== loginPassword
-      ) {
+      if (storedAccount.email !== loginEmail.toLowerCase()) {
         setAuthFeedback('Invalid email or password.');
         return;
       }
 
-      window.localStorage.setItem(SESSION_STORAGE_KEY, storedAccount.email);
-      setSessionEmail(storedAccount.email);
-      setAccount(storedAccount);
-      setNewSlug(storedAccount.customSlug);
-      setAuthFeedback('Login successful.');
+      setIsLoading(true);
+
+      verifyPassword(loginPassword, storedAccount.passwordHash).then((isValid) => {
+        if (!isValid) {
+          setAuthFeedback('Invalid email or password.');
+          setIsLoading(false);
+          return;
+        }
+
+        window.localStorage.setItem(SESSION_STORAGE_KEY, storedAccount.email);
+        setSessionEmail(storedAccount.email);
+        setAccount(storedAccount);
+        setNewSlug(storedAccount.customSlug);
+        setAuthFeedback('Login successful.');
+        setIsLoading(false);
+      });
     },
     [loginEmail, loginPassword],
   );
