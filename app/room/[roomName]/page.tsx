@@ -25,11 +25,6 @@ if (!DAILY_SUBDOMAIN) {
  * - room-{timestamp}-{randomstring}: e.g., room-1234567890-abc123xyz
  */
 function isValidRoomName(roomName: string): boolean {
-  // Must start with "room-" and contain at least one more character
-  if (!roomName.startsWith('room-') || roomName.length < 8) {
-    return false;
-  }
-
   // UUID pattern: room-{8hex}-{4hex}-{4hex}-{4hex}-{12hex}
   const uuidPattern = /^room-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   
@@ -102,8 +97,10 @@ export default function RoomPage({ params }: RoomPageProps) {
       >
         <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Invalid Room</h1>
         <p style={{ marginBottom: '1.5rem', maxWidth: '32rem' }}>
-          The room identifier &ldquo;{params.roomName}&rdquo; does not match the expected format. 
-          Please check the URL and try again.
+          The room identifier &ldquo;{params.roomName}&rdquo; does not match the expected format.
+        </p>
+        <p style={{ marginBottom: '1.5rem', maxWidth: '32rem', fontSize: '0.875rem', color: '#999' }}>
+          Valid formats: room-&#123;uuid&#125; or room-&#123;timestamp&#125;-&#123;random&#125;
         </p>
         <a
           href="/dashboard"
