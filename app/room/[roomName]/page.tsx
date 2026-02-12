@@ -49,7 +49,6 @@ export default function RoomPage({ params }: RoomPageProps) {
     } else if (typeof mediaQuery.addListener === 'function') {
       mediaQuery.addListener(updateViewportMode);
     }
-    
     window.addEventListener('resize', updateViewportMode);
     window.addEventListener('orientationchange', updateViewportMode);
 
@@ -59,7 +58,6 @@ export default function RoomPage({ params }: RoomPageProps) {
       } else if (typeof mediaQuery.removeListener === 'function') {
         mediaQuery.removeListener(updateViewportMode);
       }
-      
       window.removeEventListener('resize', updateViewportMode);
       window.removeEventListener('orientationchange', updateViewportMode);
     };
