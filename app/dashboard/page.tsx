@@ -2,6 +2,21 @@
 
 import { useState } from 'react';
 
+type CreateRoomResponse = {
+  roomName?: string;
+  name?: string;
+  url?: string;
+  error?: string;
+};
+
+async function parseCreateRoomResponse(response: Response): Promise<CreateRoomResponse> {
+  try {
+    return (await response.json()) as CreateRoomResponse;
+  } catch {
+    return {};
+  }
+}
+
 export default function DashboardPage() {
   const [roomUrl, setRoomUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -16,21 +31,23 @@ export default function DashboardPage() {
         method: 'POST',
       });
 
+      const data = await parseCreateRoomResponse(response);
+
       if (!response.ok) {
-        throw new Error('Failed to generate room link.');
+        throw new Error(data.error ?? 'Failed to generate room link.');
       }
 
-      const data = (await response.json()) as { roomName?: string };
+      const roomName = data.roomName ?? data.name;
 
-      if (!data.roomName) {
-        throw new Error('Response missing roomName.');
+      if (!roomName) {
+        throw new Error(data.error ?? 'Response missing room name.');
       }
 
-      const generatedUrl = `${window.location.origin}/room/${data.roomName}`;
+      const generatedUrl = `${window.location.origin}/room/${encodeURIComponent(roomName)}`;
       setRoomUrl(generatedUrl);
-    } catch {
+    } catch (error) {
       setRoomUrl('');
-      setCopyFeedback('Unable to generate link. Please try again.');
+      setCopyFeedback(error instanceof Error ? error.message : 'Unable to generate link. Please try again.');
     } finally {
       setIsLoading(false);
     }
