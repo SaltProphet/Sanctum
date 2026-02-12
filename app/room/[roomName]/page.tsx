@@ -8,7 +8,19 @@ interface RoomPageProps {
   };
 }
 
-const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN ?? 'sanctum';
+const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN;
+
+if (!DAILY_SUBDOMAIN) {
+  throw new Error('NEXT_PUBLIC_DAILY_SUBDOMAIN environment variable is required');
+}
+
+function isValidRoomName(roomName: string): boolean {
+  // Validate UUID format: room-{uuid}
+  const uuidPattern = /^room-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  // Validate timestamp-random format: room-{timestamp}-{random}
+  const timestampPattern = /^room-\d+-[a-z0-9]+$/i;
+  return uuidPattern.test(roomName) || timestampPattern.test(roomName);
+}
 
 function buildDailyRoomUrl(roomName: string): string {
   return `https://${DAILY_SUBDOMAIN}.daily.co/${encodeURIComponent(roomName)}`;
