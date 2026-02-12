@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 type CreateRoomResponse = {
   roomName?: string;
   name?: string;
+  url?: string;
 };
 
 type BurnerRoom = {
@@ -65,6 +66,52 @@ function readStoredAccount(): CreatorAccount | null {
 
 function writeStoredAccount(account: CreatorAccount) {
   window.localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(account));
+type PreflightFailure = {
+  gate?: unknown;
+  message?: unknown;
+};
+
+type CreateRoomErrorResponse = {
+  error?: {
+    code?: unknown;
+    message?: unknown;
+    failures?: unknown;
+  };
+};
+
+function parseCreateRoomError(data: unknown): string {
+  if (!data || typeof data !== 'object') {
+    return 'Unable to generate link. Please try again.';
+  }
+
+  const parsed = data as CreateRoomErrorResponse;
+  const errorMessage = typeof parsed.error?.message === 'string' ? parsed.error.message : null;
+
+  if (parsed.error?.code !== 'CREATOR_PREFLIGHT_FAILED') {
+    return errorMessage ?? 'Unable to generate link. Please try again.';
+  }
+
+  const failures = Array.isArray(parsed.error.failures) ? (parsed.error.failures as PreflightFailure[]) : [];
+
+  if (failures.length === 0) {
+    return errorMessage ?? 'Room creation is blocked until creator checks pass.';
+  }
+
+  const details = failures
+    .map((failure) => {
+      const gate =
+        failure.gate === 'payment'
+          ? 'Payment'
+          : failure.gate === 'verification'
+            ? 'Verification'
+            : 'Preflight';
+
+      const message = typeof failure.message === 'string' ? failure.message : 'Check failed.';
+      return `${gate}: ${message}`;
+    })
+    .join(' ');
+
+  return details;
 }
 
 export default function DashboardPage() {
@@ -240,16 +287,26 @@ export default function DashboardPage() {
 
     try {
       const response = await fetch('/api/create-room', { method: 'POST' });
+      const response = await fetch('/api/create-room', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ creatorIdentityId: 'dashboard-creator' }),
+      });
+
+      const responseData = (await response.json()) as unknown;
 
       if (!response.ok) {
-        throw new Error('Failed to generate room link.');
+        throw new Error(parseCreateRoomError(responseData));
       }
 
-      const data = (await response.json()) as CreateRoomResponse;
+      const data = responseData as CreateRoomResponse;
       const roomName = data.roomName ?? data.name;
+      const canonicalPath = data.url ?? (roomName ? `/room/${roomName}` : '');
 
-      if (!roomName) {
-        throw new Error('Response missing room name.');
+      if (!canonicalPath.startsWith('/room/')) {
+        throw new Error('Response missing canonical room URL.');
       }
 
       const generatedUrl = `${window.location.origin}/room/${roomName}`;
@@ -266,10 +323,11 @@ export default function DashboardPage() {
 
       writeStoredAccount(updatedAccount);
       setAccount(updatedAccount);
+      const generatedUrl = `${window.location.origin}${canonicalPath}`;
       setRoomUrl(generatedUrl);
-    } catch {
+    } catch (error) {
       setRoomUrl('');
-      setCopyFeedback('Unable to generate link. Please try again.');
+      setCopyFeedback(error instanceof Error ? error.message : 'Unable to generate link. Please try again.');
     } finally {
       setIsLoading(false);
     }
