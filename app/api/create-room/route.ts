@@ -25,7 +25,7 @@ export async function POST(): Promise<Response> {
 
   const payload = {
     name: createUniqueRoomName(),
-    privacy: 'public' as const,
+    privacy: 'private' as const,
     properties: {
       exp: Math.floor(Date.now() / 1000) + ROOM_EXPIRATION_SECONDS,
       enable_chat: true,
