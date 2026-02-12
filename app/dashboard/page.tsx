@@ -3,6 +3,11 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
+type CreateRoomResponse = {
+  roomName?: string;
+  name?: string;
+};
+
 export default function DashboardPage() {
   const [roomUrl, setRoomUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -21,13 +26,14 @@ export default function DashboardPage() {
         throw new Error('Failed to generate room link.');
       }
 
-      const data = (await response.json()) as { roomName?: string };
+      const data = (await response.json()) as CreateRoomResponse;
+      const roomName = data.roomName ?? data.name;
 
-      if (!data.roomName) {
-        throw new Error('Response missing roomName.');
+      if (!roomName) {
+        throw new Error('Response missing room name.');
       }
 
-      const generatedUrl = `${window.location.origin}/room/${data.roomName}`;
+      const generatedUrl = `${window.location.origin}/room/by-name/${roomName}`;
       setRoomUrl(generatedUrl);
     } catch {
       setRoomUrl('');
