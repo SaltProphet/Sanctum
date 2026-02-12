@@ -1,10 +1,23 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function RoomPage() {
   const params = useParams();
+  const router = useRouter();
   const roomName = params.roomName as string;
+
+  useEffect(() => {
+    // Validate room name format: room-{timestamp}-{random}
+    if (!roomName || !roomName.match(/^room-\d+-[a-f0-9]+$/)) {
+      router.push('/dashboard');
+    }
+  }, [roomName, router]);
+
+  if (!roomName) {
+    return null;
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-black text-white p-4">

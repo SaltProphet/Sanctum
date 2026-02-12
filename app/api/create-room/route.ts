@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
 
 export async function POST() {
-  // Generate a unique room name using timestamp and random string
+  // Generate a unique room name using timestamp and cryptographically secure random string
   const timestamp = Date.now();
-  const randomPart = Math.random().toString(36).substring(2, 8);
+  const randomPart = randomBytes(6).toString('hex');
   const roomName = `room-${timestamp}-${randomPart}`;
 
   // In a real implementation, you would store the room data in a database
