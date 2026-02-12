@@ -16,17 +16,13 @@ function buildDailyRoomUrl(roomName: string): string {
   return `https://${subdomain}.daily.co/${encodeURIComponent(roomName)}`;
 }
 
-function detectMobileViewport(): boolean {
-  return window.matchMedia('(max-width: 768px), (pointer: coarse)').matches;
-}
-
 export default function RoomPage({ params }: RoomPageProps) {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const roomUrl = useMemo(() => buildDailyRoomUrl(params.roomName), [params.roomName]);
 
   useEffect(() => {
     const updateViewportMode = () => {
-      setIsMobileViewport(detectMobileViewport());
+      setIsMobileViewport(window.matchMedia('(max-width: 768px), (pointer: coarse)').matches);
     };
 
     updateViewportMode();
