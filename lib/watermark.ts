@@ -1,3 +1,5 @@
+'use server';
+
 import crypto from 'node:crypto';
 import { isIP } from 'node:net';
 
