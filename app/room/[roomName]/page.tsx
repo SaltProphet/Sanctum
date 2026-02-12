@@ -22,9 +22,10 @@ function buildDailyRoomUrl(roomName: string): string {
 }
 
 function isValidRoomName(roomName: string): boolean {
-  // Validate against expected room naming pattern from the API
-  // API generates names like "room-{uuid}" or "room-{timestamp}-{random}"
-  return /^room-[a-f0-9-]+$/i.test(roomName) && roomName.length >= 8;
+  // Validate against expected room naming patterns from the API:
+  // 1. room-{UUID} format: room-550e8400-e29b-41d4-a716-446655440000
+  // 2. room-{timestamp}-{random} format: room-1234567890-abc123xyz
+  return /^room-[a-z0-9-]+$/i.test(roomName) && roomName.length >= 8;
 }
 
 function detectMobileViewport(): boolean {
