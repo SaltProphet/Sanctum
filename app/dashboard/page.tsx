@@ -310,6 +310,7 @@ export default function DashboardPage() {
 
     writeStoredAccount(updatedAccount);
     setAccount(updatedAccount);
+    setNewSlug(updatedAccount.customSlug);
     setAuthFeedback('Custom URL updated. Your one-time included change is now used.');
   }, [account, newSlug]);
 
