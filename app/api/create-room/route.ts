@@ -95,5 +95,5 @@ export async function POST(): Promise<Response> {
     );
   }
 
-  return Response.json({ url, name });
+  return Response.json({ url, roomName: name, roomId: name });
 }

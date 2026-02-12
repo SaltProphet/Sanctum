@@ -4,6 +4,8 @@ import { useState } from 'react';
 
 export default function DashboardPage() {
   const [roomUrl, setRoomUrl] = useState('');
+  const [roomId, setRoomId] = useState('');
+  const [roomName, setRoomName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState('');
 
@@ -20,16 +22,20 @@ export default function DashboardPage() {
         throw new Error('Failed to generate room link.');
       }
 
-      const data = (await response.json()) as { roomName?: string };
+      const data = (await response.json()) as { roomName?: string; roomId?: string; url?: string };
 
-      if (!data.roomName) {
-        throw new Error('Response missing roomName.');
+      if (!data.roomName || !data.roomId) {
+        throw new Error('Response missing roomName or roomId.');
       }
 
       const generatedUrl = `${window.location.origin}/room/${data.roomName}`;
       setRoomUrl(generatedUrl);
+      setRoomId(data.roomId);
+      setRoomName(data.roomName);
     } catch {
       setRoomUrl('');
+      setRoomId('');
+      setRoomName('');
       setCopyFeedback('Unable to generate link. Please try again.');
     } finally {
       setIsLoading(false);
@@ -97,6 +103,12 @@ export default function DashboardPage() {
 
         {roomUrl ? (
           <div style={{ marginTop: '1.25rem' }}>
+            <div style={{ marginBottom: '1rem', textAlign: 'left' }}>
+              <p style={{ marginBottom: '0.25rem', fontSize: '0.875rem', color: '#a3a3a3' }}>Room ID</p>
+              <p style={{ marginTop: 0, marginBottom: '0.75rem', fontFamily: 'monospace', color: '#f5f5f5' }}>{roomId}</p>
+              <p style={{ marginBottom: '0.25rem', fontSize: '0.875rem', color: '#a3a3a3' }}>Room Name</p>
+              <p style={{ marginTop: 0, fontFamily: 'monospace', color: '#f5f5f5' }}>{roomName}</p>
+            </div>
             <p style={{ marginBottom: '0.5rem' }}>Generated Link</p>
             <div
               style={{
