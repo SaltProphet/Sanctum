@@ -1,17 +1,35 @@
 'use client';
 
+import type { PassType } from '@/lib/passType';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 type CreateRoomResponse = {
   roomName?: string;
   name?: string;
 };
 
+type PassOption = {
+  type: PassType;
+  label: string;
+  durationLabel: string;
+};
+
+const PASS_OPTIONS: PassOption[] = [
+  { type: 'quickie', label: 'Quickie Pass', durationLabel: '3 hours' },
+  { type: 'marathon', label: 'Marathon Pass', durationLabel: '24 hours' },
+];
+
 export default function DashboardPage() {
   const [roomUrl, setRoomUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState('');
+  const [selectedPassType, setSelectedPassType] = useState<PassType>('quickie');
+
+  const selectedPass = useMemo(
+    () => PASS_OPTIONS.find((option) => option.type === selectedPassType) ?? PASS_OPTIONS[0],
+    [selectedPassType],
+  );
 
   const handleGenerateLink = async () => {
     setIsLoading(true);
@@ -20,6 +38,10 @@ export default function DashboardPage() {
     try {
       const response = await fetch('/api/create-room', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ passType: selectedPassType }),
       });
 
       if (!response.ok) {
@@ -80,11 +102,48 @@ export default function DashboardPage() {
       >
         <h1 style={{ marginTop: 0, marginBottom: '1.25rem' }}>Room Link Generator</h1>
 
+        <fieldset
+          style={{
+            margin: 0,
+            padding: 0,
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
+            textAlign: 'left',
+          }}
+        >
+          <legend style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Choose pass type</legend>
+          {PASS_OPTIONS.map((passOption) => (
+            <label
+              key={passOption.type}
+              style={{
+                border: '1px solid #3a3a3a',
+                borderRadius: '8px',
+                padding: '0.75rem',
+                cursor: 'pointer',
+                backgroundColor: selectedPassType === passOption.type ? '#1e293b' : '#0f0f0f',
+              }}
+            >
+              <input
+                type="radio"
+                name="pass-type"
+                value={passOption.type}
+                checked={selectedPassType === passOption.type}
+                onChange={() => setSelectedPassType(passOption.type)}
+                style={{ marginRight: '0.5rem' }}
+              />
+              {passOption.label} ({passOption.durationLabel})
+            </label>
+          ))}
+        </fieldset>
+
         <button
           onClick={handleGenerateLink}
           disabled={isLoading}
           style={{
             width: '100%',
+            marginTop: '1rem',
             padding: '0.75rem 1rem',
             borderRadius: '8px',
             border: 'none',
@@ -95,11 +154,11 @@ export default function DashboardPage() {
             color: '#ffffff',
           }}
         >
-          {isLoading ? 'Generating...' : 'Generate 30-Minute Link'}
+          {isLoading ? 'Generating...' : `Generate ${selectedPass.label} Link`}
         </button>
 
         <p style={{ marginTop: '0.75rem', marginBottom: 0, color: '#ef4444', fontWeight: 600 }}>
-          Link expires in 30 minutes.
+          Link expires in {selectedPass.durationLabel}.
         </p>
 
         {roomUrl ? (
