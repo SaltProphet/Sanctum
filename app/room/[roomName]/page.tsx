@@ -8,10 +8,23 @@ interface RoomPageProps {
   };
 }
 
-const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN ?? 'sanctum';
+const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN;
+
+if (!DAILY_SUBDOMAIN) {
+  throw new Error(
+    'NEXT_PUBLIC_DAILY_SUBDOMAIN environment variable is not configured. ' +
+    'Please set it in your .env.local file.'
+  );
+}
 
 function buildDailyRoomUrl(roomName: string): string {
   return `https://${DAILY_SUBDOMAIN}.daily.co/${encodeURIComponent(roomName)}`;
+}
+
+function isValidRoomName(roomName: string): boolean {
+  // Validate against expected room naming pattern from the API
+  // API generates names like "room-{uuid}" or "room-{timestamp}-{random}"
+  return /^room-[a-f0-9-]+$/i.test(roomName) && roomName.length >= 8;
 }
 
 function detectMobileViewport(): boolean {
@@ -24,7 +37,11 @@ function detectMobileViewport(): boolean {
 
 export default function RoomPage({ params }: RoomPageProps) {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
-  const roomUrl = useMemo(() => buildDailyRoomUrl(params.roomName), [params.roomName]);
+  const isValid = isValidRoomName(params.roomName);
+  const roomUrl = useMemo(() => {
+    if (!isValid) return '';
+    return buildDailyRoomUrl(params.roomName);
+  }, [params.roomName, isValid]);
 
   useEffect(() => {
     const updateViewportMode = () => {
@@ -48,6 +65,33 @@ export default function RoomPage({ params }: RoomPageProps) {
       window.removeEventListener('orientationchange', updateViewportMode);
     };
   }, []);
+  
+  // Validate room name before attempting to embed
+  if (!isValid) {
+    return (
+      <main
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '100%',
+          height: '100dvh',
+          backgroundColor: '#000',
+          color: '#fff',
+          fontFamily: 'system-ui, sans-serif',
+          textAlign: 'center',
+          padding: '2rem',
+        }}
+      >
+        <div>
+          <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Invalid Room Name</h1>
+          <p style={{ fontSize: '1rem', color: '#999' }}>
+            The room name &quot;{params.roomName}&quot; is not valid. Please check the URL and try again.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main
@@ -63,6 +107,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         title={`Daily room ${params.roomName}`}
         src={roomUrl}
         allow="camera; microphone; fullscreen; speaker-selection; display-capture"
+        allowFullScreen
         style={{
           position: 'absolute',
           top: 0,
