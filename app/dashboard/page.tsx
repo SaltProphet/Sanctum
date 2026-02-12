@@ -97,7 +97,9 @@ export default function DashboardPage() {
 
         {roomUrl ? (
           <div style={{ marginTop: '1.25rem' }}>
-            <p style={{ marginBottom: '0.5rem' }}>Generated Link</p>
+            <label htmlFor="generated-room-link" style={{ marginBottom: '0.5rem', display: 'block' }}>
+              Generated Link
+            </label>
             <div
               style={{
                 display: 'flex',
@@ -106,6 +108,7 @@ export default function DashboardPage() {
               }}
             >
               <input
+                id="generated-room-link"
                 value={roomUrl}
                 readOnly
                 style={{
@@ -135,7 +138,11 @@ export default function DashboardPage() {
           </div>
         ) : null}
 
-        {copyFeedback ? <p style={{ marginTop: '0.75rem' }}>{copyFeedback}</p> : null}
+        {copyFeedback ? (
+          <p style={{ marginTop: '0.75rem' }} role="status" aria-live="polite">
+            {copyFeedback}
+          </p>
+        ) : null}
       </section>
     </main>
   );
