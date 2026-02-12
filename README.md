@@ -1,13 +1,13 @@
 # Sanctum
 
-A modern, dark mode, mobile-first web application built with Next.js 15, TypeScript, and Tailwind CSS.
+A modern, dark mode, mobile-first web application built with Next.js, TypeScript, and Tailwind CSS.
 
 ## Features
 
 - 🌙 **Dark Mode**: Black backgrounds with slate-800 containers
 - 💚 **Neon Green Accents**: Custom neon green color (#39FF14) for highlights
 - 📱 **Mobile-First**: Optimized for mobile portrait mode (375x667)
-- 🎨 **Pure Tailwind CSS**: No custom CSS files, only Tailwind utilities
+- 🎨 **Tailwind-First Styling**: Tailwind utilities are used broadly, with some custom/global styles where needed
 - ⚡ **Selective Client Components**: 'use client' only where necessary
 
 ## Design Principles
@@ -29,10 +29,11 @@ A modern, dark mode, mobile-first web application built with Next.js 15, TypeScr
 - Proper spacing with `px-4 py-8`
 - Touch-friendly button sizes
 
-### 4. Tailwind-Only Styling
-- No custom CSS files (except `globals.css` with Tailwind directives)
-- All styling done with Tailwind utility classes
-- Custom colors defined in `tailwind.config.ts`
+### 4. Tailwind-First Styling
+- `app/globals.css` includes Tailwind directives plus additional global rules (for `:root`, `.dark`, and `body`)
+- Most UI styling uses Tailwind utility classes
+- `app/dashboard/page.tsx` currently uses inline styles for its dashboard UI
+- Custom colors are defined in `tailwind.config.ts`
 
 ## Getting Started
 
@@ -73,7 +74,7 @@ sanctum/
 ├── app/
 │   ├── layout.tsx        # Root layout with dark mode styling
 │   ├── page.tsx          # Home page (server component)
-│   └── globals.css       # Tailwind directives only
+│   └── globals.css       # Tailwind directives + additional global rules
 ├── components/
 │   └── InteractiveCounter.tsx  # Example client component
 ├── tailwind.config.ts    # Tailwind config with custom colors
@@ -93,10 +94,15 @@ sanctum/
 
 ## Technologies
 
-- **Framework**: Next.js 15 (App Router)
-- **Language**: TypeScript 5
+- **Framework**: Next.js 14.2.32 (App Router)
+- **Language**: TypeScript 5.7.2
 - **Styling**: Tailwind CSS 3.4
-- **Runtime**: React 18
+- **Runtime**: React 18.3.1
+
+## Follow-up (if moving to Tailwind-only)
+
+- Refactor `app/dashboard/page.tsx` to replace inline style objects with Tailwind utility classes.
+- After the refactor, update this README to remove inline-style caveats and document a true Tailwind-only approach.
 
 ## License
 
