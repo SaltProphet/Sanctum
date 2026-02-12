@@ -1,3 +1,5 @@
+import { createUniqueRoomName } from '@/lib/roomName';
+
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
 const ROOM_EXPIRATION_SECONDS = 1800;
 
@@ -5,14 +7,6 @@ type DailyRoomResponse = {
   url?: unknown;
   name?: unknown;
 };
-
-function createUniqueRoomName(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return `room-${crypto.randomUUID()}`;
-  }
-
-  return `room-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 async function tryParseJson(response: Response): Promise<unknown | null> {
   try {
