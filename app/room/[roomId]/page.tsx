@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import DailyIframe from '@daily-co/daily-js';
+import { clearClientEphemeralStorage } from '@/lib/panicState';
 
 type RoomPageProps = {
   params: {
@@ -11,6 +12,11 @@ type RoomPageProps = {
 };
 
 const MOCK_IP = '203.0.113.42';
+const PANIC_REDIRECT_URL = 'https://www.google.com';
+
+function redirectToNeutralUrl(redirectUrl: string): void {
+  window.location.assign(redirectUrl);
+}
 
 export default function RoomPage({ params }: RoomPageProps) {
   const router = useRouter();
@@ -63,20 +69,82 @@ export default function RoomPage({ params }: RoomPageProps) {
     };
   }, [roomUrl]);
 
-  const handlePanicLeave = useCallback(() => {
+  useEffect(() => {
+    const source = new EventSource(`/api/rooms/${params.roomId}/panic/stream`);
+
+    const onPanic = (event: MessageEvent<string>) => {
+      let redirectUrl = PANIC_REDIRECT_URL;
+
+      try {
+        const parsed = JSON.parse(event.data) as { redirectUrl?: string };
+        if (typeof parsed.redirectUrl === 'string' && parsed.redirectUrl.length > 0) {
+          redirectUrl = parsed.redirectUrl;
+        }
+      } catch {
+        // fallback to default neutral URL
+      }
+
+      clearClientEphemeralStorage();
+
+      const currentCall = callObjectRef.current;
+      if (!currentCall) {
+        redirectToNeutralUrl(redirectUrl);
+        return;
+      }
+
+      void currentCall.leave().finally(() => {
+        currentCall.destroy();
+        callObjectRef.current = null;
+        redirectToNeutralUrl(redirectUrl);
+      });
+    };
+
+    source.addEventListener('panic-shutdown', onPanic as EventListener);
+
+    return () => {
+      source.removeEventListener('panic-shutdown', onPanic as EventListener);
+      source.close();
+    };
+  }, [params.roomId]);
+
+  const handlePanicLeave = useCallback(async () => {
+    const panicResponse = await fetch(`/api/rooms/${params.roomId}/panic`, {
+      method: 'POST',
+    });
+
+    if (!panicResponse.ok) {
+      const currentCall = callObjectRef.current;
+
+      clearClientEphemeralStorage();
+      if (!currentCall) {
+        router.push('/');
+        return;
+      }
+
+      void currentCall.leave().finally(() => {
+        currentCall.destroy();
+        callObjectRef.current = null;
+        router.push('/');
+      });
+
+      return;
+    }
+
+    clearClientEphemeralStorage();
+
     const currentCall = callObjectRef.current;
 
     if (!currentCall) {
-      router.push('/');
+      redirectToNeutralUrl(PANIC_REDIRECT_URL);
       return;
     }
 
     void currentCall.leave().finally(() => {
       currentCall.destroy();
       callObjectRef.current = null;
-      router.push('/');
+      redirectToNeutralUrl(PANIC_REDIRECT_URL);
     });
-  }, [router]);
+  }, [params.roomId, router]);
 
   return (
     <main className="relative h-[100dvh] w-full overflow-hidden bg-black">
@@ -96,7 +164,9 @@ export default function RoomPage({ params }: RoomPageProps) {
 
       <button
         type="button"
-        onClick={handlePanicLeave}
+        onClick={() => {
+          void handlePanicLeave();
+        }}
         className="absolute bottom-6 left-1/2 z-[60] flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-red-600 text-xs font-bold uppercase tracking-wide text-white shadow-lg transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300"
       >
         Panic
