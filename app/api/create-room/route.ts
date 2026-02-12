@@ -1,11 +1,28 @@
+import {
+  createPaymentProvider,
+  createVerificationProvider,
+  evaluateCreatorPreflight,
+  type CreatorPreflightFailure,
+} from '@/lib/creatorGate';
 import { createUniqueRoomName } from '@/lib/roomName';
 
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
 const ROOM_EXPIRATION_SECONDS = 1800;
 
 type DailyRoomResponse = {
-  url?: unknown;
   name?: unknown;
+};
+
+type CreateRoomRequestBody = {
+  creatorIdentityId?: unknown;
+};
+
+type PreflightErrorResponse = {
+  error: {
+    code: 'CREATOR_PREFLIGHT_FAILED';
+    message: string;
+    failures: CreatorPreflightFailure[];
+  };
 };
 
 async function tryParseJson(response: Response): Promise<unknown | null> {
@@ -16,7 +33,52 @@ async function tryParseJson(response: Response): Promise<unknown | null> {
   }
 }
 
-export async function POST(): Promise<Response> {
+async function tryParseRequestJson(request: Request): Promise<unknown | null> {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+}
+
+function getCreatorIdentityId(parsedBody: unknown): string {
+  if (!parsedBody || typeof parsedBody !== 'object') {
+    return 'mock-creator';
+  }
+
+  const { creatorIdentityId } = parsedBody as CreateRoomRequestBody;
+
+  if (typeof creatorIdentityId !== 'string' || creatorIdentityId.trim().length === 0) {
+    return 'mock-creator';
+  }
+
+  return creatorIdentityId.trim();
+}
+
+function buildPreflightErrorResponse(failures: CreatorPreflightFailure[]): PreflightErrorResponse {
+  return {
+    error: {
+      code: 'CREATOR_PREFLIGHT_FAILED',
+      message: 'Creator identity did not pass required preflight checks.',
+      failures,
+    },
+  };
+}
+
+export async function POST(request: Request): Promise<Response> {
+  const parsedBody = await tryParseRequestJson(request);
+  const creatorIdentityId = getCreatorIdentityId(parsedBody);
+
+  const preflightResult = await evaluateCreatorPreflight({
+    creatorIdentityId,
+    paymentProvider: createPaymentProvider(),
+    verificationProvider: createVerificationProvider(),
+  });
+
+  if (!preflightResult.ok) {
+    return Response.json(buildPreflightErrorResponse(preflightResult.failures), { status: 403 });
+  }
+
   const apiKey = process.env.DAILY_API_KEY;
 
   if (!apiKey) {
@@ -71,11 +133,13 @@ export async function POST(): Promise<Response> {
     return Response.json({ error: 'Daily rooms API returned invalid JSON.' }, { status: 502 });
   }
 
-  const { url, name } = upstreamBody as DailyRoomResponse;
+  const { name } = upstreamBody as DailyRoomResponse;
 
-  if (typeof url !== 'string' || typeof name !== 'string') {
+  if (typeof name !== 'string') {
     return Response.json({ error: 'Daily rooms API response is missing room fields.' }, { status: 502 });
   }
 
-  return Response.json({ roomName: name, url, name });
+  const roomPath = `/room/${name}`;
+
+  return Response.json({ roomName: name, url: roomPath, name });
 }
