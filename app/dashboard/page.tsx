@@ -325,7 +325,6 @@ export default function DashboardPage() {
     setCopyFeedback('');
 
     try {
-      const response = await fetch('/api/create-room', { method: 'POST' });
       const response = await fetch('/api/create-room', {
         method: 'POST',
         headers: {
@@ -348,9 +347,9 @@ export default function DashboardPage() {
         throw new Error('Response missing canonical room URL.');
       }
 
-      const generatedUrl = `${window.location.origin}/room/${roomName}`;
+      const generatedUrl = `${window.location.origin}${canonicalPath}`;
       const nextRoom: BurnerRoom = {
-        id: roomName,
+        id: roomName ?? canonicalPath.replace('/room/', ''),
         createdAt: new Date().toISOString(),
         url: generatedUrl,
       };
@@ -362,7 +361,6 @@ export default function DashboardPage() {
 
       writeStoredAccount(updatedAccount);
       setAccount(updatedAccount);
-      const generatedUrl = `${window.location.origin}${canonicalPath}`;
       setRoomUrl(generatedUrl);
     } catch (error) {
       setRoomUrl('');
