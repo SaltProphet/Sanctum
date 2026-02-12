@@ -6,6 +6,7 @@ import { useState } from 'react';
 type CreateRoomResponse = {
   roomName?: string;
   name?: string;
+  url?: string;
 };
 
 export default function DashboardPage() {
@@ -28,12 +29,13 @@ export default function DashboardPage() {
 
       const data = (await response.json()) as CreateRoomResponse;
       const roomName = data.roomName ?? data.name;
+      const canonicalPath = data.url ?? (roomName ? `/room/${roomName}` : '');
 
-      if (!roomName) {
-        throw new Error('Response missing room name.');
+      if (!canonicalPath.startsWith('/room/')) {
+        throw new Error('Response missing canonical room URL.');
       }
 
-      const generatedUrl = `${window.location.origin}/room/by-name/${roomName}`;
+      const generatedUrl = `${window.location.origin}${canonicalPath}`;
       setRoomUrl(generatedUrl);
     } catch {
       setRoomUrl('');

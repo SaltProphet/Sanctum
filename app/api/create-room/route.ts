@@ -4,7 +4,6 @@ const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
 const ROOM_EXPIRATION_SECONDS = 1800;
 
 type DailyRoomResponse = {
-  url?: unknown;
   name?: unknown;
 };
 
@@ -71,11 +70,13 @@ export async function POST(): Promise<Response> {
     return Response.json({ error: 'Daily rooms API returned invalid JSON.' }, { status: 502 });
   }
 
-  const { url, name } = upstreamBody as DailyRoomResponse;
+  const { name } = upstreamBody as DailyRoomResponse;
 
-  if (typeof url !== 'string' || typeof name !== 'string') {
+  if (typeof name !== 'string') {
     return Response.json({ error: 'Daily rooms API response is missing room fields.' }, { status: 502 });
   }
 
-  return Response.json({ roomName: name, url, name });
+  const roomPath = `/room/${name}`;
+
+  return Response.json({ roomName: name, url: roomPath, name });
 }
