@@ -39,11 +39,6 @@ export default function DashboardPage() {
     [selectedPassType],
   );
 
-  const selectedDurationLabel = useMemo(
-    () => getPassDurationLabel(selectedPassType),
-    [selectedPassType],
-  );
-
   const handleGenerateLink = async () => {
     setIsLoading(true);
     setCopyFeedback('');
@@ -171,7 +166,7 @@ export default function DashboardPage() {
         </button>
 
         <p style={{ marginTop: '0.75rem', marginBottom: 0, color: '#ef4444', fontWeight: 600 }}>
-          Link expires in {selectedDurationLabel}.
+          Link expires in {getPassDurationLabel(selectedPassType)}.
         </p>
 
         {roomUrl ? (
