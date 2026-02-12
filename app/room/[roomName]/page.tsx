@@ -8,7 +8,11 @@ interface RoomPageProps {
   };
 }
 
-const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN ?? 'sanctum';
+// Fail fast if NEXT_PUBLIC_DAILY_SUBDOMAIN is not configured
+if (!process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN) {
+  throw new Error('NEXT_PUBLIC_DAILY_SUBDOMAIN environment variable is required');
+}
+const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN;
 
 function buildDailyRoomUrl(roomName: string): string {
   return `https://${DAILY_SUBDOMAIN}.daily.co/${encodeURIComponent(roomName)}`;
@@ -38,12 +42,24 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
 
     const mediaQuery = window.matchMedia('(max-width: 768px), (pointer: coarse)');
-    mediaQuery.addEventListener('change', updateViewportMode);
+    
+    // Feature-detect addEventListener/removeEventListener vs addListener/removeListener for Safari/iOS compatibility
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateViewportMode);
+    } else if (typeof mediaQuery.addListener === 'function') {
+      mediaQuery.addListener(updateViewportMode);
+    }
+    
     window.addEventListener('resize', updateViewportMode);
     window.addEventListener('orientationchange', updateViewportMode);
 
     return () => {
-      mediaQuery.removeEventListener('change', updateViewportMode);
+      if (typeof mediaQuery.removeEventListener === 'function') {
+        mediaQuery.removeEventListener('change', updateViewportMode);
+      } else if (typeof mediaQuery.removeListener === 'function') {
+        mediaQuery.removeListener(updateViewportMode);
+      }
+      
       window.removeEventListener('resize', updateViewportMode);
       window.removeEventListener('orientationchange', updateViewportMode);
     };
@@ -63,6 +79,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         title={`Daily room ${params.roomName}`}
         src={roomUrl}
         allow="camera; microphone; fullscreen; speaker-selection; display-capture"
+        allowFullScreen
         style={{
           position: 'absolute',
           top: 0,

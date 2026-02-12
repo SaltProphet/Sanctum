@@ -94,6 +94,8 @@ sanctum/
 ## Technologies
 
 - **Framework**: Next.js 15 (App Router)
+  - Upgraded from Next.js 14.2.x to Next.js 15 for improved App Router performance, enhanced TypeScript support, and better developer experience
+  - Uses `^15` version range to receive minor updates and patches automatically
 - **Language**: TypeScript 5
 - **Styling**: Tailwind CSS 3.4
 - **Runtime**: React 18
