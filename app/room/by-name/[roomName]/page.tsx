@@ -1,4 +1,7 @@
 import { isValidRoomName } from '@/lib/roomName';
+import { isPassType } from '@/lib/passType';
+import { DAILY_ROOMS_URL } from '@/lib/dailyConfig';
+import { tryParseJson } from '@/lib/jsonUtils';
 import { redirect } from 'next/navigation';
 
 type DailyRoomDetailsResponse = {
@@ -15,16 +18,6 @@ type RoomByNamePageProps = {
     roomName: string;
   };
 };
-
-const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
-
-async function tryParseJson(response: Response): Promise<unknown | null> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
 
 async function getRoomMetadata(roomName: string): Promise<DailyRoomDetailsResponse | null> {
   const apiKey = process.env.DAILY_API_KEY;
@@ -95,7 +88,9 @@ export default async function RoomPage({ params }: RoomByNamePageProps) {
   }
 
   const passType = roomDetails.properties?.pass_type;
-  const passLabel = passType === 'marathon' ? 'Marathon' : 'Quickie';
+  const passLabel = isPassType(passType) 
+    ? passType === 'marathon' ? 'Marathon' : 'Quickie'
+    : 'Unknown';
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-black text-white p-4">
