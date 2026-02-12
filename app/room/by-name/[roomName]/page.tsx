@@ -3,14 +3,15 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
+const ROOM_NAME_PATTERN = /^room-[a-z0-9-]+$/i;
+
 export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
   const roomName = params.roomName as string;
 
   useEffect(() => {
-    // Validate room name format: room-{timestamp}-{random}
-    if (!roomName || !roomName.match(/^room-\d+-[a-f0-9]+$/)) {
+    if (!roomName || !ROOM_NAME_PATTERN.test(roomName)) {
       router.push('/dashboard');
     }
   }, [roomName, router]);
