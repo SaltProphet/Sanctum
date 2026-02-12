@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getBrandingWatermark, resolveCreatorTier } from './watermark.ts';
+import {
+  getBrandingWatermark,
+  resolveCreatorTier,
+  buildWatermarkText,
+  createWatermarkTiles,
+  getClientIpHash,
+  getWatermarkMetadata,
+  resolveClientIpFromHeaders,
+} from './watermark.ts';
 
 test('resolveCreatorTier defaults to burner', () => {
   assert.equal(resolveCreatorTier(null), 'burner');
@@ -41,16 +49,7 @@ test('empire tier prefers provided logo URL and falls back', () => {
     src: '/UserUpload.png',
     alt: 'Creator branding watermark',
   });
-import assert from 'node:assert/strict';
-import test from 'node:test';
-
-import {
-  buildWatermarkText,
-  createWatermarkTiles,
-  getClientIpHash,
-  getWatermarkMetadata,
-  resolveClientIpFromHeaders,
-} from './watermark.ts';
+});
 
 test('resolveClientIpFromHeaders reads first valid forwarded IP', () => {
   const headers = new Headers({ 'x-forwarded-for': '198.51.100.25, 10.0.0.1' });
