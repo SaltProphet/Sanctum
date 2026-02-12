@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import DailyIframe from '@daily-co/daily-js';
 
 type RoomPageProps = {
@@ -12,9 +12,16 @@ type RoomPageProps = {
 
 const MOCK_IP = '203.0.113.42';
 
+type MeetingTokenResponse = {
+  token?: string;
+};
+
 export default function RoomPage({ params }: RoomPageProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const callObjectRef = useRef<ReturnType<typeof DailyIframe.createFrame> | null>(null);
+  const [tokenError, setTokenError] = useState('');
+  const [isJoining, setIsJoining] = useState(true);
 
   const roomUrl = useMemo(() => {
     const dailyDomain = process.env.NEXT_PUBLIC_DAILY_DOMAIN;
@@ -26,30 +33,85 @@ export default function RoomPage({ params }: RoomPageProps) {
     return `https://${dailyDomain}/${params.roomId}`;
   }, [params.roomId]);
 
+  const role = useMemo(() => {
+    return searchParams.get('role') === 'creator' ? 'creator' : 'viewer';
+  }, [searchParams]);
+
   useEffect(() => {
     if (!roomUrl) {
+      setTokenError('Missing NEXT_PUBLIC_DAILY_DOMAIN configuration.');
+      setIsJoining(false);
       return;
     }
 
     const frameElement = document.getElementById('daily-frame');
 
     if (!frameElement) {
+      setTokenError('Failed to initialize Daily frame.');
+      setIsJoining(false);
       return;
     }
 
-    const callObject = DailyIframe.createFrame(frameElement, {
-      iframeStyle: {
-        width: '100%',
-        height: '100dvh',
-        border: '0',
-      },
-      showLeaveButton: false,
-    });
+    let isDisposed = false;
 
-    callObjectRef.current = callObject;
-    void callObject.join({ url: roomUrl });
+    async function joinWithToken() {
+      setIsJoining(true);
+      setTokenError('');
+
+      const tokenResponse = await fetch('/api/meeting-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ roomName: params.roomId, role }),
+      });
+
+      if (!tokenResponse.ok) {
+        setTokenError('Unable to issue a meeting token for this room.');
+        setIsJoining(false);
+        return;
+      }
+
+      const tokenBody = (await tokenResponse.json()) as MeetingTokenResponse;
+
+      if (typeof tokenBody.token !== 'string' || tokenBody.token.length === 0) {
+        setTokenError('Received an invalid meeting token.');
+        setIsJoining(false);
+        return;
+      }
+
+      if (isDisposed) {
+        return;
+      }
+
+      const callObject = DailyIframe.createFrame(frameElement, {
+        iframeStyle: {
+          width: '100%',
+          height: '100dvh',
+          border: '0',
+        },
+        showLeaveButton: false,
+      });
+
+      callObjectRef.current = callObject;
+
+      try {
+        await callObject.join({
+          url: roomUrl,
+          token: tokenBody.token,
+        });
+      } catch {
+        setTokenError('Token-based join failed.');
+      } finally {
+        setIsJoining(false);
+      }
+    }
+
+    void joinWithToken();
 
     return () => {
+      isDisposed = true;
+
       const currentCall = callObjectRef.current;
       callObjectRef.current = null;
 
@@ -61,7 +123,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         currentCall.destroy();
       });
     };
-  }, [roomUrl]);
+  }, [params.roomId, role, roomUrl]);
 
   const handlePanicLeave = useCallback(() => {
     const currentCall = callObjectRef.current;
@@ -80,6 +142,18 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   return (
     <main className="relative h-[100dvh] w-full overflow-hidden bg-black">
+      {tokenError ? (
+        <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/80 p-6 text-center text-white">
+          <p>{tokenError}</p>
+        </div>
+      ) : null}
+
+      {isJoining ? (
+        <div className="absolute inset-0 z-[65] flex items-center justify-center bg-black/50 p-6 text-center text-white">
+          <p>Joining room…</p>
+        </div>
+      ) : null}
+
       <div id="daily-frame" className="h-full w-full" />
 
       <div className="pointer-events-none absolute inset-0 z-50 opacity-30">
