@@ -239,6 +239,7 @@ export default function DashboardPage() {
   const handleLogout = useCallback(() => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
     setSessionEmail('');
+    setAccount(null);
     setRoomUrl('');
     setCopyFeedback('');
     setAuthFeedback('Logged out.');
