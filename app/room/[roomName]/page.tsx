@@ -17,7 +17,7 @@ function buildDailyRoomUrl(roomName: string): string {
   
   // Validate roomName matches expected pattern: room-{uuid} or room-{timestamp}-{random}
   const validRoomPattern = /^room-[a-f0-9-]+$/i;
-  if (!validRoomPattern.test(roomName)) {
+  if (!validRoomPattern.test(roomName) || roomName.length < 8) {
     throw new Error('Invalid room name format. Expected format: room-{uuid} or room-{timestamp}-{random}');
   }
   
