@@ -23,8 +23,14 @@ type RoomPageProps = {
 
 export default function RoomPage({ params }: RoomPageProps) {
   const sessionCookieStore = cookies();
-  const sessionId = sessionCookieStore.get(SESSION_COOKIE_NAME)?.value ?? createViewerSessionId();
-  const clientIp = resolveClientIpFromHeaders(headers());
+  const headerMap = headers();
+  // First try to get session ID from header set by middleware (for first request)
+  // Fall back to cookie value (for subsequent requests after cookie is persisted)
+  const sessionId =
+    headerMap.get('x-viewer-session-id') ??
+    sessionCookieStore.get(SESSION_COOKIE_NAME)?.value ??
+    createViewerSessionId();
+  const clientIp = resolveClientIpFromHeaders(headerMap);
   const clientIpHash = getClientIpHash(clientIp);
   const watermarkText = buildWatermarkText(sessionId, clientIpHash);
 

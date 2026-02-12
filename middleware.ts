@@ -23,19 +23,24 @@ const BLOCKED_US_STATE_CODES = [
 const BLOCKED_US_STATE_SET = new Set<string>(BLOCKED_US_STATE_CODES);
 
 function attachViewerSessionCookie(req: NextRequest, response: NextResponse): NextResponse {
-  if (req.cookies.get(SESSION_COOKIE_NAME)) {
-    return response;
+  let sessionId = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+
+  if (!sessionId) {
+    sessionId = createViewerSessionId();
+    response.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: sessionId,
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 12,
+    });
   }
 
-  response.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: createViewerSessionId(),
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: 60 * 60 * 12,
-  });
+  // Pass session ID to server components via header since cookies set in middleware
+  // are not visible to cookies() in the same request
+  response.headers.set('x-viewer-session-id', sessionId);
 
   return response;
 }
