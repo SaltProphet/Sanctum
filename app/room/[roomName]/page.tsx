@@ -32,7 +32,19 @@ function isValidRoomName(roomName: string): boolean {
 }
 
 function buildDailyRoomUrl(roomName: string): string {
-  return `https://${DAILY_SUBDOMAIN}.daily.co/${encodeURIComponent(roomName)}`;
+  const subdomain = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN;
+  
+  if (!subdomain) {
+    throw new Error('NEXT_PUBLIC_DAILY_SUBDOMAIN environment variable is not configured');
+  }
+  
+  // Validate roomName matches expected pattern: room-{uuid} or room-{timestamp}-{random}
+  const validRoomPattern = /^room-[a-f0-9-]+$/i;
+  if (!validRoomPattern.test(roomName) || roomName.length < 8) {
+    throw new Error('Invalid room name format. Expected format: room-{uuid} or room-{timestamp}-{random}');
+  }
+  
+  return `https://${subdomain}.daily.co/${encodeURIComponent(roomName)}`;
 }
 
 function detectMobileViewport(): boolean {
