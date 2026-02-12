@@ -1,5 +1,6 @@
 'use client';
 
+import { isValidRoomName } from '@/lib/roomName';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -9,8 +10,7 @@ export default function RoomPage() {
   const roomName = params.roomName as string;
 
   useEffect(() => {
-    // Validate room name format: room-{timestamp}-{random}
-    if (!roomName || !roomName.match(/^room-\d+-[a-f0-9]+$/)) {
+    if (!roomName || !isValidRoomName(roomName)) {
       router.push('/dashboard');
     }
   }, [roomName, router]);
