@@ -100,7 +100,7 @@ export default function RoomPage({ params }: RoomPageProps) {
           The room identifier &ldquo;{params.roomName}&rdquo; does not match the expected format.
         </p>
         <p style={{ marginBottom: '1.5rem', maxWidth: '32rem', fontSize: '0.875rem', color: '#999' }}>
-          Valid formats: room-&#123;uuid&#125; or room-&#123;timestamp&#125;-&#123;random&#125;
+          Valid formats: room-{'{'}uuid{'}'} or room-{'{'}timestamp{'}'}-{'{'}random{'}'}
         </p>
         <a
           href="/dashboard"
