@@ -12,6 +12,10 @@ const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN;
 
 if (!DAILY_SUBDOMAIN) {
   throw new Error(
+    'NEXT_PUBLIC_DAILY_SUBDOMAIN environment variable is not configured. ' +
+    'Please set it in your .env.local file.'
+  );
+}
     'NEXT_PUBLIC_DAILY_SUBDOMAIN environment variable is required but not configured. ' +
     'Please set it to your Daily.co subdomain.'
   );
@@ -47,6 +51,13 @@ function buildDailyRoomUrl(roomName: string): string {
   return `https://${subdomain}.daily.co/${encodeURIComponent(roomName)}`;
 }
 
+function isValidRoomName(roomName: string): boolean {
+  // Validate against expected room naming patterns from the API:
+  // 1. room-{UUID} format: room-550e8400-e29b-41d4-a716-446655440000
+  // 2. room-{timestamp}-{random} format: room-1234567890-abc123xyz
+  return /^room-[a-z0-9-]+$/i.test(roomName) && roomName.length >= 8;
+}
+
 function detectMobileViewport(): boolean {
   if (typeof window === 'undefined') {
     return false;
@@ -57,6 +68,11 @@ function detectMobileViewport(): boolean {
 
 export default function RoomPage({ params }: RoomPageProps) {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const isValid = useMemo(() => isValidRoomName(params.roomName), [params.roomName]);
+  const roomUrl = useMemo(() => {
+    if (!isValid) return '';
+    return buildDailyRoomUrl(params.roomName);
+  }, [params.roomName, isValid]);
   const roomUrl = useMemo(() => buildDailyRoomUrl(params.roomName), [params.roomName]);
   const isValid = useMemo(() => isValidRoomName(params.roomName), [params.roomName]);
 
@@ -83,12 +99,30 @@ export default function RoomPage({ params }: RoomPageProps) {
     };
   }, []);
   
+  // Validate room name before attempting to embed
   // Validate roomName against expected pattern
   if (!isValid) {
     return (
       <main
         style={{
           display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '100%',
+          height: '100dvh',
+          backgroundColor: '#000',
+          color: '#fff',
+          fontFamily: 'system-ui, sans-serif',
+          textAlign: 'center',
+          padding: '2rem',
+        }}
+      >
+        <div>
+          <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Invalid Room Name</h1>
+          <p style={{ fontSize: '1rem', color: '#999' }}>
+            The room name &quot;{params.roomName}&quot; is not valid. Please check the URL and try again.
+          </p>
+        </div>
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
