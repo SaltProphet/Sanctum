@@ -88,6 +88,8 @@ function readStoredAccount(): CreatorAccount | null {
 
 function writeStoredAccount(account: CreatorAccount) {
   window.localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(account));
+}
+
 type PreflightFailure = {
   gate?: unknown;
   message?: unknown;
