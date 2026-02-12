@@ -1,7 +1,7 @@
 import { createUniqueRoomName } from '@/lib/roomName';
 import { getPassDurationSeconds, isPassType, type PassType } from '@/lib/passType';
-
-const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
+import { DAILY_ROOMS_URL } from '@/lib/dailyConfig';
+import { tryParseJson } from '@/lib/jsonUtils';
 
 type DailyRoomResponse = {
   url?: unknown;
@@ -11,14 +11,6 @@ type DailyRoomResponse = {
 type CreateRoomRequestBody = {
   passType?: unknown;
 };
-
-async function tryParseJson(response: Response): Promise<unknown | null> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
 
 function getRequestedPassType(body: CreateRoomRequestBody): PassType | null {
   if (!isPassType(body.passType)) {

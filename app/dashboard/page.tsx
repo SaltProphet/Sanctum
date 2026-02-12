@@ -1,23 +1,31 @@
 'use client';
 
 import type { PassType } from '@/lib/passType';
+import { getPassDurationSeconds } from '@/lib/passType';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 type CreateRoomResponse = {
   roomName?: string;
   name?: string;
+  passType?: PassType;
+  expiresAtEpochSeconds?: number;
 };
 
 type PassOption = {
   type: PassType;
   label: string;
-  durationLabel: string;
 };
 
+function getPassDurationLabel(passType: PassType): string {
+  const seconds = getPassDurationSeconds(passType);
+  const hours = seconds / 3600;
+  return hours === 1 ? '1 hour' : `${hours} hours`;
+}
+
 const PASS_OPTIONS: PassOption[] = [
-  { type: 'quickie', label: 'Quickie Pass', durationLabel: '3 hours' },
-  { type: 'marathon', label: 'Marathon Pass', durationLabel: '24 hours' },
+  { type: 'quickie', label: 'Quickie Pass' },
+  { type: 'marathon', label: 'Marathon Pass' },
 ];
 
 export default function DashboardPage() {
@@ -133,7 +141,7 @@ export default function DashboardPage() {
                 onChange={() => setSelectedPassType(passOption.type)}
                 style={{ marginRight: '0.5rem' }}
               />
-              {passOption.label} ({passOption.durationLabel})
+              {passOption.label} ({getPassDurationLabel(passOption.type)})
             </label>
           ))}
         </fieldset>
@@ -158,7 +166,7 @@ export default function DashboardPage() {
         </button>
 
         <p style={{ marginTop: '0.75rem', marginBottom: 0, color: '#ef4444', fontWeight: 600 }}>
-          Link expires in {selectedPass.durationLabel}.
+          Link expires in {getPassDurationLabel(selectedPassType)}.
         </p>
 
         {roomUrl ? (
