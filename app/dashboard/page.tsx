@@ -20,13 +20,20 @@ export default function DashboardPage() {
         throw new Error('Failed to generate room link.');
       }
 
-      const data = (await response.json()) as { roomName?: string };
+      const data = (await response.json()) as {
+        roomName?: string;
+        name?: string;
+        url?: string;
+        error?: string;
+      };
 
-      if (!data.roomName) {
-        throw new Error('Response missing roomName.');
+      const roomName = data.roomName ?? data.name;
+
+      if (!roomName) {
+        throw new Error(data.error ?? 'Response missing room name.');
       }
 
-      const generatedUrl = `${window.location.origin}/room/${data.roomName}`;
+      const generatedUrl = `${window.location.origin}/room/${encodeURIComponent(roomName)}`;
       setRoomUrl(generatedUrl);
     } catch {
       setRoomUrl('');
