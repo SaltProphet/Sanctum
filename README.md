@@ -101,16 +101,3 @@ sanctum/
 ## License
 
 MIT
-## Routing Contract (to avoid roomId/roomName conflicts)
-
-- Dynamic room page path is canonicalized as: `app/room/[roomName]/page.tsx`
-- Client links should always target: `/room/${encodeURIComponent(roomName)}`
-- Do not add a second dynamic segment for the same path (for example `[roomId]`), or Next.js will fail builds with a slug-name conflict.
-
-### Consistency Test
-
-```bash
-npm test
-```
-
-This test asserts that `[roomName]` is present, `[roomId]` is absent, and dashboard links use the canonical route.
