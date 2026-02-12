@@ -8,10 +8,20 @@ interface RoomPageProps {
   };
 }
 
-const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN ?? 'sanctum';
-
 function buildDailyRoomUrl(roomName: string): string {
-  return `https://${DAILY_SUBDOMAIN}.daily.co/${encodeURIComponent(roomName)}`;
+  const subdomain = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN;
+  
+  if (!subdomain) {
+    throw new Error('NEXT_PUBLIC_DAILY_SUBDOMAIN environment variable is not configured');
+  }
+  
+  // Validate roomName matches expected pattern: room-{uuid} or room-{timestamp}-{random}
+  const validRoomPattern = /^room-[a-f0-9\-]+$/i;
+  if (!validRoomPattern.test(roomName)) {
+    throw new Error('Invalid room name format');
+  }
+  
+  return `https://${subdomain}.daily.co/${encodeURIComponent(roomName)}`;
 }
 
 function detectMobileViewport(): boolean {
@@ -63,6 +73,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         title={`Daily room ${params.roomName}`}
         src={roomUrl}
         allow="camera; microphone; fullscreen; speaker-selection; display-capture"
+        allowFullScreen
         style={{
           position: 'absolute',
           top: 0,
