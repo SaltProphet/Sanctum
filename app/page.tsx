@@ -12,7 +12,7 @@ export default function HomePage() {
         </p>
         <Link
           href="/dashboard"
-          className="inline-flex w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-400 px-5 py-3 text-base font-semibold text-black shadow-[0_0_24px_rgba(74,222,128,0.65)] transition hover:bg-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+          className="inline-flex w-full items-center justify-center rounded-lg border border-neon-green bg-neon-green px-5 py-3 text-base font-semibold text-black shadow-[0_0_24px_rgba(57,255,20,0.65)] transition hover:bg-neon-green/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neon-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
         >
           Creator Dashboard
         </Link>

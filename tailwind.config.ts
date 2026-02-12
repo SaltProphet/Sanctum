@@ -7,7 +7,11 @@ const config: Config = {
     './components/**/*.{js,ts,jsx,tsx,mdx}'
   ],
   theme: {
-    extend: {}
+    extend: {
+      colors: {
+        'neon-green': '#39FF14'
+      }
+    }
   },
   plugins: []
 };
