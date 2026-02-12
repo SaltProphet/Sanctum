@@ -97,7 +97,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       <button
         type="button"
         onClick={handlePanicLeave}
-        className="absolute bottom-6 left-1/2 z-60 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-red-600 text-xs font-bold uppercase tracking-wide text-white shadow-lg transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300"
+        className="absolute bottom-6 left-1/2 z-[60] flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-red-600 text-xs font-bold uppercase tracking-wide text-white shadow-lg transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300"
       >
         Panic
       </button>
