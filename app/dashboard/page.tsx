@@ -16,16 +16,16 @@ export default function DashboardPage() {
         method: 'POST',
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate room link.');
-      }
-
       const data = (await response.json()) as {
         roomName?: string;
         name?: string;
         url?: string;
         error?: string;
       };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Failed to generate room link.');
+      }
 
       const roomName = data.roomName ?? data.name;
 
@@ -35,9 +35,9 @@ export default function DashboardPage() {
 
       const generatedUrl = `${window.location.origin}/room/${encodeURIComponent(roomName)}`;
       setRoomUrl(generatedUrl);
-    } catch {
+    } catch (error) {
       setRoomUrl('');
-      setCopyFeedback('Unable to generate link. Please try again.');
+      setCopyFeedback(error instanceof Error ? error.message : 'Unable to generate link. Please try again.');
     } finally {
       setIsLoading(false);
     }
