@@ -8,17 +8,15 @@ interface RoomPageProps {
   };
 }
 
-const DAILY_SUBDOMAIN = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN ?? 'sanctum';
-
 function buildDailyRoomUrl(roomName: string): string {
-  return `https://${DAILY_SUBDOMAIN}.daily.co/${encodeURIComponent(roomName)}`;
+  const subdomain = process.env.NEXT_PUBLIC_DAILY_SUBDOMAIN;
+  if (!subdomain) {
+    throw new Error('NEXT_PUBLIC_DAILY_SUBDOMAIN environment variable is not configured');
+  }
+  return `https://${subdomain}.daily.co/${encodeURIComponent(roomName)}`;
 }
 
 function detectMobileViewport(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
   return window.matchMedia('(max-width: 768px), (pointer: coarse)').matches;
 }
 
@@ -32,10 +30,6 @@ export default function RoomPage({ params }: RoomPageProps) {
     };
 
     updateViewportMode();
-
-    if (typeof window === 'undefined') {
-      return;
-    }
 
     const mediaQuery = window.matchMedia('(max-width: 768px), (pointer: coarse)');
     mediaQuery.addEventListener('change', updateViewportMode);
@@ -63,6 +57,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         title={`Daily room ${params.roomName}`}
         src={roomUrl}
         allow="camera; microphone; fullscreen; speaker-selection; display-capture"
+        allowFullScreen
         style={{
           position: 'absolute',
           top: 0,
