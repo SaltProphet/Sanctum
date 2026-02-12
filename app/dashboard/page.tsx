@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 type CreateRoomResponse = {
@@ -149,6 +150,14 @@ export default function DashboardPage() {
             {copyFeedback}
           </p>
         ) : null}
+
+        <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#a3a3a3' }}>
+          By generating a room, you agree to the{' '}
+          <Link href="/terms" style={{ color: '#39ff14', textDecoration: 'underline' }}>
+            Terms of Service
+          </Link>
+          .
+        </p>
       </section>
     </main>
   );

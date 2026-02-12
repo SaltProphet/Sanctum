@@ -16,6 +16,9 @@ export default function HomePage() {
         >
           Creator Dashboard
         </Link>
+        <Link href="/terms" className="text-sm text-slate-300 underline underline-offset-2 hover:text-slate-100">
+          Review Terms of Service
+        </Link>
       </div>
     </main>
   );
