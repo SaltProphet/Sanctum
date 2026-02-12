@@ -1,11 +1,4 @@
-export default function BlockedPage() {
-  return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-6 text-center">
-      <h1 className="text-3xl font-semibold">Access Restricted</h1>
-      <p className="mt-4 text-lg text-gray-700">
-        Service not available in your region due to local regulations requiring ID verification.
-      </p>
-import Link from "next/link";
+import Link from 'next/link';
 
 export default function BlockedPage() {
   return (
@@ -15,8 +8,8 @@ export default function BlockedPage() {
           Service not available in your region
         </h1>
         <p className="text-base leading-relaxed text-slate-300">
-          Due to local regulations requiring age/ID verification, this service is
-          currently unavailable in your region.
+          Due to local regulations requiring age/ID verification, this service is currently
+          unavailable in your region.
         </p>
         <div className="flex flex-col gap-3 pt-2 sm:flex-row">
           <Link
