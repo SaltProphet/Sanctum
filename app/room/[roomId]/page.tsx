@@ -10,6 +10,8 @@ import {
 import { cookies, headers } from 'next/headers';
 import RoomClient from './RoomClient';
 
+import { getBrandingWatermark } from '@/lib/watermark';
+
 type RoomPageProps = {
   params: {
     roomId: string;
