@@ -16,6 +16,8 @@ import {
 import { cookies, headers } from 'next/headers';
 import RoomClient from './RoomClient';
 
+import { getBrandingWatermark } from '@/lib/watermark';
+
 type RoomPageProps = {
   params: {
     roomId: string;
@@ -42,6 +44,17 @@ export default function RoomPage({ params }: RoomPageProps) {
 
     return `https://${dailyDomain}/${params.roomId}`;
   }, [params.roomId]);
+
+  const role = useMemo(() => {
+    return searchParams.get('role') === 'creator' ? 'creator' : 'viewer';
+  }, [searchParams]);
+
+  const brandingWatermark = useMemo(() => {
+    return getBrandingWatermark({
+      tierParam: searchParams.get('tier'),
+      customLogoUrlParam: searchParams.get('logo'),
+    });
+  }, [searchParams]);
 
   useEffect(() => {
     if (!roomUrl) {
@@ -172,6 +185,17 @@ export default function RoomPage({ params }: RoomPageProps) {
           ))}
         </div>
       </div>
+
+
+      {brandingWatermark.kind === 'none' ? null : (
+        <div className="pointer-events-none absolute bottom-6 right-6 z-[55] rounded-md bg-black/60 px-3 py-2">
+          <img
+            src={brandingWatermark.src}
+            alt={brandingWatermark.alt}
+            className="h-10 w-auto max-w-[140px] object-contain"
+          />
+        </div>
+      )}
 
       <button
         type="button"
