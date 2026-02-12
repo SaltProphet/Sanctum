@@ -1,21 +1,4 @@
-import { NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
-
-export async function POST() {
-  // Generate a unique room name using timestamp and cryptographically secure random string
-  const timestamp = Date.now();
-  const randomPart = randomBytes(6).toString('hex');
-  const roomName = `room-${timestamp}-${randomPart}`;
-
-  // In a real implementation, you would store the room data in a database
-  // with an expiry time of 30 minutes from now
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-
-  return NextResponse.json({
-    roomName,
-    expiresAt,
-  });
-const DAILY_ROOMS_URL = "https://api.daily.co/v1/rooms";
+const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
 const ROOM_EXPIRATION_SECONDS = 1800;
 
 type DailyRoomResponse = {
@@ -24,7 +7,7 @@ type DailyRoomResponse = {
 };
 
 function createUniqueRoomName(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return `room-${crypto.randomUUID()}`;
   }
 
@@ -43,15 +26,12 @@ export async function POST(): Promise<Response> {
   const apiKey = process.env.DAILY_API_KEY;
 
   if (!apiKey) {
-    return Response.json(
-      { error: "Server is missing DAILY_API_KEY configuration." },
-      { status: 500 },
-    );
+    return Response.json({ error: 'Server is missing DAILY_API_KEY configuration.' }, { status: 500 });
   }
 
   const payload = {
     name: createUniqueRoomName(),
-    privacy: "public" as const,
+    privacy: 'public' as const,
     properties: {
       exp: Math.floor(Date.now() / 1000) + ROOM_EXPIRATION_SECONDS,
       enable_chat: true,
@@ -62,18 +42,15 @@ export async function POST(): Promise<Response> {
   let upstreamResponse: Response;
   try {
     upstreamResponse = await fetch(DAILY_ROOMS_URL, {
-      method: "POST",
+      method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
     });
   } catch {
-    return Response.json(
-      { error: "Failed to reach Daily rooms API." },
-      { status: 502 },
-    );
+    return Response.json({ error: 'Failed to reach Daily rooms API.' }, { status: 502 });
   }
 
   const upstreamBody = await tryParseJson(upstreamResponse);
@@ -81,11 +58,11 @@ export async function POST(): Promise<Response> {
   if (!upstreamResponse.ok) {
     const upstreamErrorMessage =
       upstreamBody &&
-      typeof upstreamBody === "object" &&
-      "error" in upstreamBody &&
-      typeof (upstreamBody as { error?: unknown }).error === "string"
+      typeof upstreamBody === 'object' &&
+      'error' in upstreamBody &&
+      typeof (upstreamBody as { error?: unknown }).error === 'string'
         ? (upstreamBody as { error: string }).error
-        : "Daily rooms API returned an error.";
+        : 'Daily rooms API returned an error.';
 
     return Response.json(
       {
@@ -96,21 +73,15 @@ export async function POST(): Promise<Response> {
     );
   }
 
-  if (!upstreamBody || typeof upstreamBody !== "object") {
-    return Response.json(
-      { error: "Daily rooms API returned invalid JSON." },
-      { status: 502 },
-    );
+  if (!upstreamBody || typeof upstreamBody !== 'object') {
+    return Response.json({ error: 'Daily rooms API returned invalid JSON.' }, { status: 502 });
   }
 
   const { url, name } = upstreamBody as DailyRoomResponse;
 
-  if (typeof url !== "string" || typeof name !== "string") {
-    return Response.json(
-      { error: "Daily rooms API response is missing room fields." },
-      { status: 502 },
-    );
+  if (typeof url !== 'string' || typeof name !== 'string') {
+    return Response.json({ error: 'Daily rooms API response is missing room fields.' }, { status: 502 });
   }
 
-  return Response.json({ url, name });
+  return Response.json({ roomName: name, url, name });
 }
