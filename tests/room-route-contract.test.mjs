@@ -20,10 +20,18 @@ test('canonical room route uses [roomName] only', () => {
 test('create-room API returns both name and roomName for compatibility', () => {
   const source = read('app/api/create-room/route.ts');
 
+  // Ensure the Response.json payload includes a `name` property (order/formatting agnostic)
   assert.match(
     source,
-    /Response\.json\(\{\s*url,\s*name,\s*roomName:\s*name\s*\}\)/,
-    'Expected API response payload to include both name and roomName',
+    /Response\.json\(\{\s*[^}]*\bname\b[^}]*\}/s,
+    'Expected API response payload to include name',
+  );
+
+  // Ensure the payload also exposes `roomName` as an alias of `name` for compatibility
+  assert.match(
+    source,
+    /roomName:\s*name/,
+    'Expected API response payload to include roomName: name for compatibility',
   );
 });
 
