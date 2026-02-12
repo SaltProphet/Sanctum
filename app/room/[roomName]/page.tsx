@@ -37,7 +37,7 @@ function detectMobileViewport(): boolean {
 
 export default function RoomPage({ params }: RoomPageProps) {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
-  const isValid = isValidRoomName(params.roomName);
+  const isValid = useMemo(() => isValidRoomName(params.roomName), [params.roomName]);
   const roomUrl = useMemo(() => {
     if (!isValid) return '';
     return buildDailyRoomUrl(params.roomName);
