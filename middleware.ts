@@ -1,3 +1,4 @@
+import { createViewerSessionId, SESSION_COOKIE_NAME } from '@/lib/watermark';
 import { NextRequest, NextResponse } from 'next/server';
 
 const BLOCKED_US_STATE_CODES = [
@@ -21,6 +22,29 @@ const BLOCKED_US_STATE_CODES = [
 
 const BLOCKED_US_STATE_SET = new Set<string>(BLOCKED_US_STATE_CODES);
 
+function attachViewerSessionCookie(req: NextRequest, response: NextResponse): NextResponse {
+  let sessionId = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+
+  if (!sessionId) {
+    sessionId = createViewerSessionId();
+    response.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: sessionId,
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 12,
+    });
+  }
+
+  // Pass session ID to server components via header since cookies set in middleware
+  // are not visible to cookies() in the same request
+  response.headers.set('x-viewer-session-id', sessionId);
+
+  return response;
+}
+
 export function middleware(req: NextRequest) {
   const country = req.geo?.country ?? req.headers.get('x-vercel-ip-country') ?? undefined;
   const region = req.geo?.region ?? req.headers.get('x-vercel-ip-country-region') ?? undefined;
@@ -30,10 +54,10 @@ export function middleware(req: NextRequest) {
     blockedUrl.pathname = '/blocked';
     blockedUrl.search = '';
 
-    return NextResponse.redirect(blockedUrl);
+    return attachViewerSessionCookie(req, NextResponse.redirect(blockedUrl));
   }
 
-  return NextResponse.next();
+  return attachViewerSessionCookie(req, NextResponse.next());
 }
 
 export const config = {
