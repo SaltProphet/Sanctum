@@ -1,3 +1,9 @@
+import {
+  createPaymentProvider,
+  createVerificationProvider,
+  evaluateCreatorPreflight,
+  type CreatorPreflightFailure,
+} from '@/lib/creatorGate';
 import { createUniqueRoomName } from '@/lib/roomName';
 
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
@@ -8,6 +14,18 @@ type DailyRoomResponse = {
   name?: unknown;
 };
 
+type CreateRoomRequestBody = {
+  creatorIdentityId?: unknown;
+};
+
+type PreflightErrorResponse = {
+  error: {
+    code: 'CREATOR_PREFLIGHT_FAILED';
+    message: string;
+    failures: CreatorPreflightFailure[];
+  };
+};
+
 async function tryParseJson(response: Response): Promise<unknown | null> {
   try {
     return await response.json();
@@ -16,7 +34,52 @@ async function tryParseJson(response: Response): Promise<unknown | null> {
   }
 }
 
-export async function POST(): Promise<Response> {
+async function tryParseRequestJson(request: Request): Promise<unknown | null> {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+}
+
+function getCreatorIdentityId(parsedBody: unknown): string {
+  if (!parsedBody || typeof parsedBody !== 'object') {
+    return 'mock-creator';
+  }
+
+  const { creatorIdentityId } = parsedBody as CreateRoomRequestBody;
+
+  if (typeof creatorIdentityId !== 'string' || creatorIdentityId.trim().length === 0) {
+    return 'mock-creator';
+  }
+
+  return creatorIdentityId.trim();
+}
+
+function buildPreflightErrorResponse(failures: CreatorPreflightFailure[]): PreflightErrorResponse {
+  return {
+    error: {
+      code: 'CREATOR_PREFLIGHT_FAILED',
+      message: 'Creator identity did not pass required preflight checks.',
+      failures,
+    },
+  };
+}
+
+export async function POST(request: Request): Promise<Response> {
+  const parsedBody = await tryParseRequestJson(request);
+  const creatorIdentityId = getCreatorIdentityId(parsedBody);
+
+  const preflightResult = await evaluateCreatorPreflight({
+    creatorIdentityId,
+    paymentProvider: createPaymentProvider(),
+    verificationProvider: createVerificationProvider(),
+  });
+
+  if (!preflightResult.ok) {
+    return Response.json(buildPreflightErrorResponse(preflightResult.failures), { status: 403 });
+  }
+
   const apiKey = process.env.DAILY_API_KEY;
 
   if (!apiKey) {
