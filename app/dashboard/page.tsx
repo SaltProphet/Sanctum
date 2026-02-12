@@ -35,9 +35,10 @@ export default function DashboardPage() {
 
       const generatedUrl = `${window.location.origin}/room/${encodeURIComponent(roomName)}`;
       setRoomUrl(generatedUrl);
-    } catch {
+    } catch (error) {
       setRoomUrl('');
-      setCopyFeedback('Unable to generate link. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unable to generate link. Please try again.';
+      setCopyFeedback(errorMessage);
     } finally {
       setIsLoading(false);
     }
