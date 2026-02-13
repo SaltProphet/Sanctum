@@ -45,6 +45,12 @@ function isValidSlug(slug: string): boolean {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
 }
 
+/**
+ * SECURITY WARNING: This password hashing implementation is NOT suitable for production use.
+ * It uses client-side SHA-256 without salt or key stretching, making it vulnerable to rainbow
+ * table attacks. For production, use a proper server-side authentication system with bcrypt,
+ * Argon2, or similar password hashing algorithms designed for secure password storage.
+ */
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
@@ -320,6 +326,9 @@ export default function DashboardPage() {
         setNewSlug(storedAccount.customSlug);
         setOnboardingStatus(parseBackendCreatorStatus(storedAccount.onboardingStatus));
         setAuthFeedback('Login successful.');
+      } catch (error) {
+        console.error('Error during login:', error);
+        setAuthFeedback('Something went wrong while logging in. Please try again.');
       } finally {
         setIsLoading(false);
       }

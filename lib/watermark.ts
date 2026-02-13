@@ -146,8 +146,6 @@ export function getClientIpHash(clientIp: string | null): string {
 }
 
 export function getWatermarkMetadata(sessionId: string, clientIpHash: string, roomId: string) {
-  const watermarkId = hashValue(`${sessionId}:${clientIpHash}:${roomId}`);
-  return { sessionId, clientIpHash, roomId, watermarkId };
   const watermarkId = computeHmacHash(`${sessionId}:${clientIpHash}:${roomId}`);
 
   return {

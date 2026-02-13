@@ -113,6 +113,18 @@ sanctum/
 - Refactor `app/dashboard/page.tsx` to replace inline style objects with Tailwind utility classes.
 - After the refactor, update this README to remove inline-style caveats and document a true Tailwind-only approach.
 
+
+## Veriff Webhook Endpoint
+
+Canonical external webhook URL: `POST /api/webhooks/veriff`.
+
+Expected request headers:
+- `x-veriff-signature`: HMAC SHA-256 hex digest of `<x-veriff-timestamp>.<raw-body>` using `VERIFF_WEBHOOK_SECRET`.
+- `x-veriff-timestamp`: Unix epoch timestamp in milliseconds used for signature validation and replay protection.
+- `content-type: application/json`
+
+`POST /webhooks/veriff` remains available as a compatibility alias and proxies to the canonical handler.
+
 ## AI Agent Workflow
 
 - Repository Copilot rules: `.github/copilot-instructions.md`

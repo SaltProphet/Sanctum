@@ -1,4 +1,4 @@
-import { getDepositByCreatorId } from './payments';
+import { getDepositByCreatorId } from './payments.ts';
 
 export type PaymentSettlementState = 'settled' | 'unsettled';
 export type VerificationState = 'verified' | 'unverified';

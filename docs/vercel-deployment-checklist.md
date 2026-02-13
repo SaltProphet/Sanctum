@@ -56,3 +56,14 @@ git rev-parse HEAD
 ```
 
 3. Verify deployment log shows Node `20.x` and Next.js build running `npm run build`.
+
+
+## 6) Veriff webhook endpoint wiring
+
+- Configure Veriff to send webhooks to: `https://<host>/api/webhooks/veriff`
+- Required headers from Veriff delivery:
+  - `x-veriff-signature`
+  - `x-veriff-timestamp`
+  - `content-type: application/json`
+- Signature contract: `hex(hmac_sha256(VERIFF_WEBHOOK_SECRET, "<timestamp>.<raw-body>"))`
+- `https://<host>/webhooks/veriff` is a compatibility alias only; use `/api/webhooks/veriff` for all new integrations.
