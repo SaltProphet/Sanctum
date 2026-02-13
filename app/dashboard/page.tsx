@@ -9,13 +9,13 @@ import {
   type BackendCreatorStatus,
   type OnboardingAction,
 } from "@/lib/creatorOnboarding";
+import { getNightPassRemaining } from "@/lib/countdown";
 
 type CreateRoomResponse = {
   roomName?: string;
   name?: string;
   url?: string;
 };
-import { getNightPassRemaining } from "@/lib/countdown";
 
 type BurnerRoom = {
   id: string;
@@ -414,7 +414,7 @@ export default function DashboardPage() {
 
       if (action.id === "contact_support") {
         const refId = account.onboardingReferenceId ?? "REF-UNKNOWN";
-        window.location.href = `mailto:support@sanctum.local?subject=Manual%20review%20request%20${refId}&body=Please%20review%20creator%20onboarding.%20Reference%20ID:%20${refId}`;
+        window.location.href = `mailto:support@sanctum.app?subject=Manual%20review%20request%20${refId}&body=Please%20review%20creator%20onboarding.%20Reference%20ID:%20${refId}`;
       }
     },
     [account],
