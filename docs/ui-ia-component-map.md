@@ -16,6 +16,8 @@
   - `/room/[roomId]`
   - `/blocked`
   - `/terms`
+  - `/creator/deposit/initiate` (API route)
+  - `/creator/veriff/session` (API route)
 - Daily integration is currently local to the room flow and should remain feature-local.
 
 ---
@@ -31,6 +33,9 @@ Use a shell-first IA with clear mode boundaries:
    - Dashboard/Feed (`/dashboard`)
    - Room (`/room/[roomId]`)
    - Blocked (`/blocked`) for gated users
+   - Creator onboarding API routes:
+     - `/creator/deposit/initiate` (POST)
+     - `/creator/veriff/session` (POST)
 3. **Shared system surfaces**
    - Notifications/toasts
    - Command/search palette (optional)
@@ -261,6 +266,8 @@ To prevent current “links don’t work on deploy” regressions:
   - `/room/[sample]`
   - `/blocked`
   - `/terms`
+  - `/creator/deposit/initiate` (POST)
+  - `/creator/veriff/session` (POST)
 
 ---
 
