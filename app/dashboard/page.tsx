@@ -9,6 +9,7 @@ import {
   type BackendCreatorStatus,
   type OnboardingAction,
 } from "@/lib/creatorOnboarding";
+import { getNightPassRemaining } from "@/lib/countdown";
 
 type CreateRoomResponse = {
   roomName?: string;
