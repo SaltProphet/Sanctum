@@ -75,13 +75,16 @@ test('createWatermarkTiles returns stable tile pattern for same seed', () => {
   assert.deepEqual(first, second);
 });
 
-test('watermark metadata is deterministic and does not include raw IP', () => {
+test('watermark metadata is deterministic and matches expected shape', () => {
   const ipHash = getClientIpHash('203.0.113.100');
-  const metadata = getWatermarkMetadata('session-abc', ipHash, 'room-123');
+  const first = getWatermarkMetadata('session-abc', ipHash, 'room-123');
+  const second = getWatermarkMetadata('session-abc', ipHash, 'room-123');
 
-  assert.equal(metadata.sessionId, 'session-abc');
-  assert.equal(metadata.clientIpHash, ipHash);
-  assert.equal(metadata.roomId, 'room-123');
-  assert.equal(metadata.watermarkId.length, 64);
-  assert.notEqual(metadata.watermarkId, '203.0.113.100');
+  assert.deepEqual(Object.keys(first).sort(), ['clientIpHash', 'roomId', 'sessionId', 'watermarkId']);
+  assert.deepEqual(first, second);
+  assert.equal(first.sessionId, 'session-abc');
+  assert.equal(first.clientIpHash, ipHash);
+  assert.equal(first.roomId, 'room-123');
+  assert.equal(first.watermarkId.length, 64);
+  assert.notEqual(first.watermarkId, '203.0.113.100');
 });
