@@ -21,3 +21,11 @@ Run these checks against production (or a production-like preview) after deploy.
 - [ ] Every app link includes the base path prefix.
 - [ ] Direct deep-link under base path (for example `/<base>/room/<id>`) resolves.
 - [ ] Static assets load with the configured `assetPrefix` (if set).
+
+
+## Veriff webhook smoke checks
+
+- [ ] Send signed `POST https://<host>/api/webhooks/veriff` with headers `x-veriff-signature`, `x-veriff-timestamp`, and JSON body containing `eventId`, `creatorId`, `status`, and `occurredAt`; confirm `200` with `{ ok: true }`.
+- [ ] Send the same payload with an invalid `x-veriff-signature`; confirm `401` and verification failure response.
+- [ ] Send a validly signed payload missing `creatorId` or `occurredAt`; confirm `400` payload validation error.
+- [ ] Confirm `POST https://<host>/webhooks/veriff` behaves as compatibility alias while canonical integrations use `/api/webhooks/veriff`.
