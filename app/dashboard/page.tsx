@@ -374,30 +374,11 @@ export default function DashboardPage() {
         return;
       }
 
-      setIsLoading(true);
-
-      verifyPassword(loginPassword, storedAccount.passwordHash).then(
-        (isValid) => {
-          if (!isValid) {
-            setAuthFeedback("Invalid email or password.");
-            setIsLoading(false);
-            return;
-          }
-
-          window.localStorage.setItem(SESSION_STORAGE_KEY, storedAccount.email);
-          setSessionEmail(storedAccount.email);
-          setAccount(storedAccount);
-          setNewSlug(storedAccount.customSlug);
-          setOnboardingStatus(
-            parseBackendCreatorStatus(storedAccount.onboardingStatus),
-          );
-          setAuthFeedback("Login successful.");
-          setIsLoading(false);
-        },
-      );
       window.localStorage.setItem(SESSION_STORAGE_KEY, stored.email);
       setSessionEmail(stored.email);
       setAccount(stored);
+      setNewSlug(stored.customSlug);
+      setOnboardingStatus(parseBackendCreatorStatus(stored.onboardingStatus));
       setFeedback("Authenticated.");
     },
     [loginEmail, loginPassword],
