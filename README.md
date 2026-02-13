@@ -104,12 +104,10 @@ sanctum/
 - Refactor `app/dashboard/page.tsx` to replace inline style objects with Tailwind utility classes.
 - After the refactor, update this README to remove inline-style caveats and document a true Tailwind-only approach.
 
+## AI Agent Workflow
 
-## Routing and deployment
-
-- Route generation is centralized in `lib/routes.ts` to keep canonical app paths consistent.
-- `next.config.mjs` reads `NEXT_PUBLIC_BASE_PATH` / `BASE_PATH`, `NEXT_PUBLIC_ASSET_PREFIX` / `ASSET_PREFIX`, and `NEXT_PUBLIC_TRAILING_SLASH` for Vercel-compatible routing behavior.
-- Use `docs/route-smoke-checklist.md` for post-deploy route verification (including deep-link and 404 behavior).
+- Repository Copilot rules: `.github/copilot-instructions.md`
+- Role/mode switching guidance: `docs/GITHUB_AI_WORKFLOW.md`
 
 ## License
 
