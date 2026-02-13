@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { getTokenExpiration } from './route.ts';
+import { getTokenExpiration } from '@/lib/meetingToken';
 
 test('caps token expiration to max token ttl when room expires later', () => {
   const now = 1_700_000_000;
