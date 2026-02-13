@@ -1,12 +1,11 @@
 import type { NextRequest } from 'next/server';
+import { getTokenExpiration } from '@/lib/meetingToken';
 import { parseResponseBodyAsJson } from '@/lib/jsonUtils';
 
 import { parseJsonResponse, isValidString } from '@/lib/jsonUtils';
 
 const DAILY_MEETING_TOKENS_URL = 'https://api.daily.co/v1/meeting-tokens';
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
-const MAX_TOKEN_TTL_SECONDS = 900;
-
 type JoinRole = 'viewer' | 'creator';
 
 type TokenRequestBody = {
@@ -34,17 +33,6 @@ function hasRequiredEntitlements(request: NextRequest): boolean {
     parseBoolean(request.cookies.get('sanctum_user_verified')?.value);
 
   return hasPurchase && hasVerification;
-}
-
-export function getTokenExpiration(nowEpochSeconds: number, roomExpiration: number): number | null {
-  const maxTokenExpiration = nowEpochSeconds + MAX_TOKEN_TTL_SECONDS;
-  const boundedExpiration = Math.min(maxTokenExpiration, roomExpiration);
-
-  if (boundedExpiration <= nowEpochSeconds) {
-    return null;
-  }
-
-  return boundedExpiration;
 }
 
 function getRole(input: unknown): JoinRole {
