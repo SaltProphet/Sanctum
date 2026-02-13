@@ -1,5 +1,4 @@
 import type { NextRequest } from 'next/server';
-
 import { parseJsonResponse, isValidString } from '@/lib/jsonUtils';
 
 const DAILY_MEETING_TOKENS_URL = 'https://api.daily.co/v1/meeting-tokens';
