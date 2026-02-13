@@ -118,6 +118,27 @@ sanctum/
 - Repository Copilot rules: `.github/copilot-instructions.md`
 - Role/mode switching guidance: `docs/GITHUB_AI_WORKFLOW.md`
 
+## Security Audit
+
+**⚠️ IMPORTANT**: A comprehensive security audit was completed on 2026-02-13, identifying **3 critical build-breaking issues** and **7 high-severity security vulnerabilities**.
+
+**Status**: 🔴 **NOT PRODUCTION READY** - Critical fixes required before deployment
+
+**Audit Documentation**:
+- 📋 **Start Here**: [`docs/AUDIT_INDEX.md`](docs/AUDIT_INDEX.md) - Complete audit documentation index
+- ⚡ **Quick Fixes**: [`docs/CRITICAL_ISSUES_QUICK_FIX.md`](docs/CRITICAL_ISSUES_QUICK_FIX.md) - Immediate fixes for build failures
+- 📊 **Executive Summary**: [`docs/AUDIT_SUMMARY.md`](docs/AUDIT_SUMMARY.md) - Risk assessment and roadmap
+- 🔒 **Full Report**: [`docs/SECURITY_AUDIT_REPORT.md`](docs/SECURITY_AUDIT_REPORT.md) - Complete 600+ line audit
+- 🔐 **Environment Setup**: [`.env.example`](.env.example) - All required environment variables
+
+**Priority Actions**:
+1. Fix 3 build-breaking syntax/import errors
+2. Patch 7 high-severity security vulnerabilities
+3. Upgrade 4 vulnerable npm packages
+4. Configure all required environment variables
+
+See audit documentation for detailed findings and remediation steps.
+
 ## License
 
 MIT
