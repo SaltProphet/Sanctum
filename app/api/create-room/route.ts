@@ -4,7 +4,8 @@ import {
   evaluateCreatorPreflight,
   type CreatorPreflightFailure,
 } from '@/lib/creatorGate';
-import { parseJsonResponse, parseJsonRequest } from '@/lib/jsonUtils';
+import { parseJsonRequest, parseJsonResponse } from '@/lib/jsonUtils';
+import { appRoutes } from '@/lib/routes';
 import { createUniqueRoomName } from '@/lib/roomName';
 
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
@@ -124,7 +125,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Daily rooms API response is missing room fields.' }, { status: 502 });
   }
 
-  const roomPath = `/room/${name}`;
+  const roomPath = appRoutes.room(name);
 
   return Response.json({ roomName: name, url: roomPath, name });
 }
