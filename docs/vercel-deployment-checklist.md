@@ -34,7 +34,7 @@ Ensure the following are set in both Preview and Production where needed:
 
 - `DAILY_API_KEY` (server API routes)
 - `VERIFF_WEBHOOK_SECRET` (Veriff webhook validation)
-- `PAYMENT_WEBHOOK_SECRET` / `PAYMENTS_WEBHOOK_SECRET` (payment webhook validation)
+- `PAYMENTS_WEBHOOK_SECRET` (payments webhook validation for `/api/webhooks/payments`)
 - `NEXT_PUBLIC_DAILY_DOMAIN` (client Daily domain)
 - Optional toggles used by feature/test paths:
   - `NEXT_PUBLIC_CREATOR_ONBOARDING_STATUS`
