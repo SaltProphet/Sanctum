@@ -280,11 +280,11 @@ export default function DashboardPage() {
         setAccount(nextAccount);
         setSessionEmail(nextAccount.email);
         setNewSlug(nextAccount.customSlug);
-        setOnboardingStatus('account_created');
-        setAuthFeedback('Registration complete. Welcome to your dashboard.');
+        setOnboardingStatus("account_created");
+        setAuthFeedback("Registration complete. Welcome to your dashboard.");
       } catch (error) {
-        console.error('Error during registration:', error);
-        setAuthFeedback('Something went wrong while registering. Please try again.');
+        console.error("Error during registration:", error);
+        setAuthFeedback("Something went wrong while registering. Please try again.");
       } finally {
         setIsLoading(false);
       }
