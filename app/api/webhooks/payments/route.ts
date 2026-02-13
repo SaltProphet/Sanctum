@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 
+import { isValidString } from '@/lib/jsonUtils';
 import { applyWebhookEvent, logWebhookSecurityEvent, verifyWebhookRequest } from '@/lib/webhookProcessor';
 
 type PaymentsWebhookBody = {
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return Response.json({ error: 'Webhook verification failed.' }, { status: 401 });
   }
 
-  if (typeof body.creatorId !== 'string' || body.creatorId.length === 0 || typeof body.occurredAt !== 'number') {
+  if (!isValidString(body.creatorId) || typeof body.occurredAt !== 'number') {
     return Response.json({ error: 'Invalid webhook payload.' }, { status: 400 });
   }
 

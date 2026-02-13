@@ -29,8 +29,13 @@ const SESSION_STORAGE_KEY = 'sanctum.creator.session';
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(password));
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  // Use for-loop for better performance - avoids intermediate array creation
+  const bytes = new Uint8Array(hashBuffer);
+  let hex = '';
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i].toString(16).padStart(2, '0');
+  }
+  return hex;
 }
 
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
@@ -115,6 +120,41 @@ export default function DashboardPage() {
       event.preventDefault();
       setAuthLoading(true);
       setAuthFeedback('');
+  const refreshDepositStatus = useCallback(async () => {
+    if (!account) {
+      setDepositStatus('deposit_missing');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/payments/deposit/status?creator_id=${encodeURIComponent(account.customSlug)}`);
+      const data = (await response.json()) as DepositStatusResponse;
+      setDepositStatus(response.ok && data.status ? data.status : 'deposit_missing');
+    } catch {
+      setDepositStatus('deposit_missing');
+    }
+
+    if (account?.onboardingStatus) {
+      setOnboardingStatus(parseBackendCreatorStatus(account.onboardingStatus));
+      return;
+    }
+
+    const envStatus = parseBackendCreatorStatus(process.env.NEXT_PUBLIC_CREATOR_ONBOARDING_STATUS);
+    setOnboardingStatus(envStatus);
+  }, [account]);
+
+  useEffect(() => {
+    if (!isAuthed || !account) {
+      return;
+    }
+
+    const currentStep = getOnboardingStatusView(onboardingStatus).currentStep;
+    const event = {
+      event: 'creator_onboarding_step_seen',
+      step: currentStep,
+      status: onboardingStatus,
+      timestamp: new Date().toISOString(),
+    };
 
       const stored = readStoredAccount();
       if (!stored || stored.email.toLowerCase() !== loginEmail.trim().toLowerCase()) {
@@ -127,6 +167,51 @@ export default function DashboardPage() {
       if (!valid) {
         setAuthLoading(false);
         setAuthFeedback('Incorrect password.');
+    }
+    // Keep only last 100 events to prevent unbounded growth
+    const MAX_ANALYTICS_EVENTS = 100;
+    const updatedEvents = [...existingEvents, event].slice(-MAX_ANALYTICS_EVENTS);
+    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify(updatedEvents));
+
+    const { dataLayer } = window as Window & { dataLayer?: unknown[] };
+    if (Array.isArray(dataLayer)) {
+      dataLayer.push(event);
+    }
+  }, [account, isAuthed, onboardingStatus]);
+
+  useEffect(() => {
+    if (!isAuthed) {
+      return;
+    }
+
+    void refreshDepositStatus();
+  }, [isAuthed, refreshDepositStatus]);
+
+  const handleInitiateDeposit = useCallback(async () => {
+    if (!account) {
+      return;
+    }
+
+    setIsInitiatingDeposit(true);
+    setDepositFeedback('');
+
+    try {
+      const response = await fetch('/api/payments/deposit/initiate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `deposit-${account.customSlug}-${Date.now()}`,
+        },
+        body: JSON.stringify({
+          creator_id: account.customSlug,
+          provider: 'stripe',
+          amount: 500,
+          currency: 'USD',
+        }),
+      });
+
+      if (!response.ok) {
+        setDepositFeedback('Unable to initiate deposit. Please retry.');
         return;
       }
 
@@ -239,6 +324,12 @@ export default function DashboardPage() {
     if (!account) return '';
     return `${origin}/c/${account.customSlug}`;
   }, [account, origin]);
+    return typeof window === 'undefined' ? `/c/${account.customSlug}` : `${window.location.origin}/c/${account.customSlug}`;
+  }, [account]);
+
+  const onboardingView = useMemo(() => getOnboardingStatusView(onboardingStatus), [onboardingStatus]);
+  const onboardingSteps = useMemo(() => buildOnboardingSteps(onboardingStatus), [onboardingStatus]);
+  const isDashboardLocked = useMemo(() => onboardingStatus !== 'active', [onboardingStatus]);
 
   if (!isAuthed) {
     return (

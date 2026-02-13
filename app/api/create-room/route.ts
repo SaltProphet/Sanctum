@@ -4,7 +4,9 @@ import {
   evaluateCreatorPreflight,
   type CreatorPreflightFailure,
 } from '@/lib/creatorGate';
+import { parseJsonResponse, parseJsonRequest } from '@/lib/jsonUtils';
 import { createUniqueRoomName } from '@/lib/roomName';
+import { parseRequestBodyAsJson, parseResponseBodyAsJson } from '@/lib/jsonUtils';
 
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
 const ROOM_EXPIRATION_SECONDS = 1800;
@@ -24,22 +26,6 @@ type PreflightErrorResponse = {
     failures: CreatorPreflightFailure[];
   };
 };
-
-async function tryParseJson(response: Response): Promise<unknown | null> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
-async function tryParseRequestJson(request: Request): Promise<unknown | null> {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
 
 function getCreatorIdentityId(parsedBody: unknown): string {
   if (!parsedBody || typeof parsedBody !== 'object') {
@@ -66,7 +52,8 @@ function buildPreflightErrorResponse(failures: CreatorPreflightFailure[]): Prefl
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const parsedBody = await tryParseRequestJson(request);
+  const parsedBody = await parseRequestBodyAsJson(request);
+  const parsedBody = await parseJsonRequest(request);
   const creatorIdentityId = getCreatorIdentityId(parsedBody);
 
   const preflightResult = await evaluateCreatorPreflight({
@@ -109,7 +96,8 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Failed to reach Daily rooms API.' }, { status: 502 });
   }
 
-  const upstreamBody = await tryParseJson(upstreamResponse);
+  const upstreamBody = await parseResponseBodyAsJson(upstreamResponse);
+  const upstreamBody = await parseJsonResponse(upstreamResponse);
 
   if (!upstreamResponse.ok) {
     const upstreamErrorMessage =

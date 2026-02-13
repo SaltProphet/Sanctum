@@ -1,5 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { getTokenExpiration } from '@/lib/meetingToken';
+import { parseResponseBodyAsJson } from '@/lib/jsonUtils';
+
+import { parseJsonResponse, isValidString } from '@/lib/jsonUtils';
 
 const DAILY_MEETING_TOKENS_URL = 'https://api.daily.co/v1/meeting-tokens';
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
@@ -36,14 +39,6 @@ function getRole(input: unknown): JoinRole {
   return input === 'creator' ? 'creator' : 'viewer';
 }
 
-async function parseJson(response: Response): Promise<unknown | null> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
 async function fetchRoomExpiration(roomName: string, apiKey: string): Promise<number | null> {
   let roomResponse: Response;
 
@@ -63,7 +58,8 @@ async function fetchRoomExpiration(roomName: string, apiKey: string): Promise<nu
     return null;
   }
 
-  const roomBody = (await parseJson(roomResponse)) as DailyRoomDetailsResponse | null;
+  const roomBody = (await parseResponseBodyAsJson(roomResponse)) as DailyRoomDetailsResponse | null;
+  const roomBody = (await parseJsonResponse(roomResponse)) as DailyRoomDetailsResponse | null;
   const roomExpiration = roomBody?.config?.exp;
 
   return typeof roomExpiration === 'number' ? roomExpiration : null;
@@ -87,7 +83,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return Response.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  if (typeof body.roomName !== 'string' || body.roomName.length === 0) {
+  if (!isValidString(body.roomName)) {
     return Response.json({ error: 'roomName is required.' }, { status: 400 });
   }
 
@@ -131,7 +127,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     return Response.json({ error: 'Failed to reach Daily meeting token API.' }, { status: 502 });
   }
 
-  const tokenBody = await parseJson(tokenResponse);
+  const tokenBody = await parseResponseBodyAsJson(tokenResponse);
+  const tokenBody = await parseJsonResponse(tokenResponse);
 
   if (!tokenResponse.ok) {
     const upstreamError =
@@ -148,7 +145,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   const token =
     tokenBody && typeof tokenBody === 'object' && 'token' in tokenBody ? (tokenBody as { token?: unknown }).token : null;
 
-  if (typeof token !== 'string' || token.length === 0) {
+  if (!isValidString(token)) {
     return Response.json({ error: 'Daily meeting token response is missing token.' }, { status: 502 });
   }
 

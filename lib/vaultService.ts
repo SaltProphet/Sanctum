@@ -102,19 +102,19 @@ const hasSensitiveFields = (input?: SensitiveVerificationFields) =>
   Boolean(input && (input.piiPointer || input.legalName || input.dobFragment));
 
 class SensitiveFieldEncryptor {
-  private readonly key: Buffer;
+  private readonly encryptionKeyBuffer: Buffer;
 
   constructor(keyMaterial: string) {
-    const key = Buffer.from(keyMaterial, 'base64');
-    if (key.byteLength !== 32) {
+    const decodedKey = Buffer.from(keyMaterial, 'base64');
+    if (decodedKey.byteLength !== 32) {
       throw new Error('Vault encryption key must be 32 bytes (base64 encoded).');
     }
-    this.key = key;
+    this.encryptionKeyBuffer = decodedKey;
   }
 
   encrypt(input: SensitiveVerificationFields): EncryptedPayload {
-    const iv = randomBytes(IV_LENGTH);
-    const cipher = createCipheriv(ALGORITHM, this.key, iv);
+    const initializationVector = randomBytes(IV_LENGTH);
+    const cipher = createCipheriv(ALGORITHM, this.encryptionKeyBuffer, initializationVector);
     const ciphertext = Buffer.concat([
       cipher.update(JSON.stringify(input), 'utf8'),
       cipher.final(),
@@ -122,7 +122,7 @@ class SensitiveFieldEncryptor {
     const authTag = cipher.getAuthTag();
 
     return {
-      iv: iv.toString('base64'),
+      iv: initializationVector.toString('base64'),
       authTag: authTag.toString('base64'),
       ciphertext: ciphertext.toString('base64'),
     };
@@ -131,7 +131,7 @@ class SensitiveFieldEncryptor {
   decrypt(input: EncryptedPayload): SensitiveVerificationFields {
     const decipher = createDecipheriv(
       ALGORITHM,
-      this.key,
+      this.encryptionKeyBuffer,
       Buffer.from(input.iv, 'base64'),
     );
     decipher.setAuthTag(Buffer.from(input.authTag, 'base64'));

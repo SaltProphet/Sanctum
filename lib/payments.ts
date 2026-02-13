@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { verifyWebhookSignature as verifySignature } from './webhookSignature.ts';
 
 export type DepositStatus = 'deposit_pending' | 'deposit_paid' | 'deposit_failed' | 'deposit_refunded';
 
@@ -42,28 +43,17 @@ function normalizeCurrency(currency: string): string {
   return currency.trim().toUpperCase();
 }
 
-function buildIdempotencyScope(provider: string, key: string): string {
+function createScopedIdempotencyKey(provider: string, key: string): string {
   return `${provider.trim().toLowerCase()}:${key.trim()}`;
 }
 
 export function verifyWebhookSignature(payload: string, signature: string | null, secret: string): boolean {
-  if (!signature || !secret) {
-    return false;
-  }
-
-  const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
-  const provided = signature.trim();
-
-  if (provided.length !== expected.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  return verifySignature(payload, signature, secret);
 }
 
 export function initiateDeposit({ idempotencyKey, creatorId, provider, amount, currency }: InitiateDepositInput): DepositRecord {
   const normalizedProvider = provider.trim().toLowerCase();
-  const scopedIdempotencyKey = buildIdempotencyScope(normalizedProvider, idempotencyKey);
+  const scopedIdempotencyKey = createScopedIdempotencyKey(normalizedProvider, idempotencyKey);
   const existing = depositsByIdempotencyKey.get(scopedIdempotencyKey);
 
   if (existing) {

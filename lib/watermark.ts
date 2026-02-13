@@ -65,6 +65,8 @@ function hashValue(value: string): string {
 
   const base = (hash >>> 0).toString(16).padStart(8, '0');
   return base.repeat(8).slice(0, 64);
+function computeHmacHash(value: string) {
+  return crypto.createHmac('sha256', getHashSecret()).update(value).digest('hex');
 }
 
 function sanitizeIp(rawIp: string | null): string | null {
@@ -99,42 +101,50 @@ export function resolveClientIpFromHeaders(headerMap: Headers): string | null {
 }
 
 export function buildWatermarkText(sessionId: string, ipHash: string) {
-  return `DO NOT RECORD • SESSION ${sessionId.slice(0, 8)} • IPH ${ipHash.slice(0, 12)}`;
+  return `DO NOT RECORD • SESSION ${sessionId.slice(0, 8)} • IP_HASH ${ipHash.slice(0, 12)}`;
 }
 
-function readSeedValue(seedHash: string, index: number) {
+function extractByteValueFromHash(seedHash: string, index: number) {
   const start = index * 2;
   const pair = seedHash.slice(start, start + 2);
   return Number.parseInt(pair, 16);
 }
 
 export function createWatermarkTiles(seed: string): WatermarkTile[] {
-  const seedHash = hashValue(seed);
+  const seedHash = computeHmacHash(seed);
 
   return Array.from({ length: TILE_COUNT }, (_, index) => {
-    const topPercent = 5 + (readSeedValue(seedHash, index % 16) / 255) * 90;
-    const leftPercent = 5 + (readSeedValue(seedHash, (index + 7) % 16) / 255) * 90;
-    const rotateDeg = -18 + (readSeedValue(seedHash, (index + 11) % 16) / 255) * 36;
-    const opacity = 0.18 + (readSeedValue(seedHash, (index + 3) % 16) / 255) * 0.2;
+    const topPercent = 5 + (extractByteValueFromHash(seedHash, index % 16) / 255) * 90;
+    const leftPercent = 5 + (extractByteValueFromHash(seedHash, (index + 7) % 16) / 255) * 90;
+    const rotateDeg = -18 + (extractByteValueFromHash(seedHash, (index + 11) % 16) / 255) * 36;
+    const opacity = 0.18 + (extractByteValueFromHash(seedHash, (index + 3) % 16) / 255) * 0.2;
 
     return { id: `tile-${index}`, topPercent, leftPercent, rotateDeg, opacity };
   });
 }
 
 export function getClientIpHash(clientIp: string | null): string {
-  return hashValue(clientIp ?? 'unknown-client-ip');
+  return computeHmacHash(clientIp ?? 'unknown-client-ip');
 }
 
 export function getWatermarkMetadata(sessionId: string, clientIpHash: string, roomId: string) {
   const watermarkId = hashValue(`${sessionId}:${clientIpHash}:${roomId}`);
   return { sessionId, clientIpHash, roomId, watermarkId };
+  const watermarkId = computeHmacHash(`${sessionId}:${clientIpHash}:${roomId}`);
+
+  return {
+    sessionId,
+    clientIpHash,
+    roomId,
+    watermarkId,
+  };
 }
 
 export function logWatermarkMapping(sessionId: string, clientIpHash: string, roomId: string): void {
   const metadata = getWatermarkMetadata(sessionId, clientIpHash, roomId);
 
   console.info('[watermark-mapping]', {
-    ts: new Date().toISOString(),
+    timestamp: new Date().toISOString(),
     roomId: metadata.roomId,
     sessionId: metadata.sessionId,
     clientIpHash: metadata.clientIpHash,
