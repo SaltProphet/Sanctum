@@ -24,23 +24,15 @@ export type WatermarkTile = {
 };
 
 export function resolveCreatorTier(tierParam: string | null): CreatorTier {
-  if (tierParam === '3' || tierParam === 'empire') {
-    return 'empire';
-  }
-
-  if (tierParam === '2' || tierParam === 'professional') {
-    return 'professional';
-  }
-
+  if (tierParam === '3' || tierParam === 'empire') return 'empire';
+  if (tierParam === '2' || tierParam === 'professional') return 'professional';
   return 'burner';
 }
 
 export function getBrandingWatermark({ tierParam, customLogoUrlParam }: BrandingWatermarkOptions): BrandingWatermark {
   const tier = resolveCreatorTier(tierParam);
 
-  if (tier === 'professional') {
-    return { kind: 'none' };
-  }
+  if (tier === 'professional') return { kind: 'none' };
 
   if (tier === 'empire') {
     return {
@@ -96,13 +88,16 @@ function isValidIpv6(value: string): boolean {
 }
 
 function sanitizeIp(rawIp: string | null): string | null {
-  if (!rawIp) {
-    return null;
-  }
+  if (!rawIp) return null;
 
   const candidate = rawIp.split(',')[0]?.trim();
-  if (!candidate) {
-    return null;
+  if (!candidate) return null;
+
+  const v4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+  const v6 = /^[0-9a-fA-F:]+$/;
+
+  if (v4.test(candidate) || v6.test(candidate)) {
+    return candidate;
   }
 
   return isValidIpv4(candidate) || isValidIpv6(candidate) ? candidate : null;
@@ -117,9 +112,7 @@ export function resolveClientIpFromHeaders(headerMap: Headers): string | null {
 
   for (const candidate of candidateHeaders) {
     const sanitized = sanitizeIp(candidate);
-    if (sanitized) {
-      return sanitized;
-    }
+    if (sanitized) return sanitized;
   }
 
   return null;
@@ -144,13 +137,7 @@ export function createWatermarkTiles(seed: string): WatermarkTile[] {
     const rotateDeg = -18 + (extractByteValueFromHash(seedHash, (index + 11) % 16) / 255) * 36;
     const opacity = 0.18 + (extractByteValueFromHash(seedHash, (index + 3) % 16) / 255) * 0.2;
 
-    return {
-      id: `tile-${index}`,
-      topPercent,
-      leftPercent,
-      rotateDeg,
-      opacity,
-    };
+    return { id: `tile-${index}`, topPercent, leftPercent, rotateDeg, opacity };
   });
 }
 
@@ -159,6 +146,8 @@ export function getClientIpHash(clientIp: string | null): string {
 }
 
 export function getWatermarkMetadata(sessionId: string, clientIpHash: string, roomId: string) {
+  const watermarkId = hashValue(`${sessionId}:${clientIpHash}:${roomId}`);
+  return { sessionId, clientIpHash, roomId, watermarkId };
   const watermarkId = computeHmacHash(`${sessionId}:${clientIpHash}:${roomId}`);
 
   return {

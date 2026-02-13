@@ -37,13 +37,7 @@ type AuthMode = 'login' | 'register';
 
 const ACCOUNT_STORAGE_KEY = 'sanctum.creator.account';
 const SESSION_STORAGE_KEY = 'sanctum.creator.session';
-const ANALYTICS_STORAGE_KEY = 'sanctum.creator.onboarding.analytics';
 
-/**
- * Simple hash function for password verification in demo/prototype environment.
- * WARNING: This is NOT suitable for production. Passwords should never be stored
- * on the client side. Use proper server-side authentication in production.
- */
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
@@ -70,10 +64,6 @@ function toSlug(input: string): string {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 30);
-}
-
-function isValidSlug(slug: string): boolean {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
 }
 
 function readStoredAccount(): CreatorAccount | null {
@@ -214,14 +204,17 @@ export default function DashboardPage() {
       timestamp: new Date().toISOString(),
     };
 
-    const existingRaw = window.localStorage.getItem(ANALYTICS_STORAGE_KEY);
-    let existingEvents: unknown[] = [];
-    if (existingRaw) {
-      try {
-        existingEvents = JSON.parse(existingRaw) as unknown[];
-      } catch {
-        existingEvents = [];
+      const stored = readStoredAccount();
+      if (!stored || stored.email.toLowerCase() !== loginEmail.trim().toLowerCase()) {
+        setAuthLoading(false);
+        setAuthFeedback('No account found for this email.');
+        return;
       }
+
+      const valid = await verifyPassword(loginPassword, stored.passwordHash);
+      if (!valid) {
+        setAuthLoading(false);
+        setAuthFeedback('Incorrect password.');
     }
     window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify([...existingEvents, event]));
 
@@ -330,73 +323,9 @@ export default function DashboardPage() {
   const handleLogout = useCallback(() => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
     setSessionEmail('');
-    setAccount(null);
-    setRoomUrl('');
-    setCopyFeedback('');
-    setAuthFeedback('Logged out.');
-    setOnboardingStatus('account_created');
+    setRoomFeedback('');
+    setLatestUrl('');
   }, []);
-
-  const handleRecoverableAction = useCallback(
-    (action: OnboardingAction) => {
-      if (!account) {
-        return;
-      }
-
-      if (action.id === 'retry_payment') {
-        setOnboardingEventMessage('Payment retry initiated. Confirming updated status from backend...');
-      }
-
-      if (action.id === 'restart_verification') {
-        setOnboardingEventMessage('Verification session restarted. Complete ID + selfie to continue.');
-      }
-
-      if (action.id === 'contact_support') {
-        const refId = account.onboardingReferenceId ?? 'REF-UNKNOWN';
-        window.location.href = `mailto:support@sanctum.local?subject=Manual%20review%20request%20${refId}&body=Please%20review%20creator%20onboarding.%20Reference%20ID:%20${refId}`;
-      }
-    },
-    [account],
-  );
-
-  const handleSlugUpdate = useCallback(() => {
-    if (!account) {
-      return;
-    }
-
-    if (onboardingStatus !== 'active') {
-      setAuthFeedback('Custom URL changes are locked until onboarding status is active.');
-      return;
-    }
-
-    const candidate = toSlug(newSlug);
-
-    if (!candidate || !isValidSlug(candidate)) {
-      setAuthFeedback('Custom URL is invalid. Use letters, numbers, and dashes only.');
-      return;
-    }
-
-    if (candidate === account.customSlug) {
-      setAuthFeedback('That custom URL is already active.');
-      return;
-    }
-
-    if (account.slugChangeUsed) {
-      setAuthFeedback('Your included one-time custom URL change has already been used.');
-      return;
-    }
-
-    const updatedAccount: CreatorAccount = {
-      ...account,
-      customSlug: candidate,
-      slugChangeUsed: true,
-    };
-
-    writeStoredAccount(updatedAccount);
-    setAccount(updatedAccount);
-    setNewSlug(updatedAccount.customSlug);
-    setAuthFeedback('Custom URL updated. Your one-time included change is now used.');
-  }, [account, newSlug, onboardingStatus]);
 
   const handleGenerateLink = useCallback(async () => {
     if (!account) {
@@ -462,16 +391,23 @@ export default function DashboardPage() {
       return;
     }
 
-    if (onboardingStatus !== 'active') {
-      setCopyFeedback('Copy actions are locked until onboarding status is active.');
-      return;
-    }
+  const handleToggle = useCallback(
+    (field: 'predatorWatermark' | 'geoBlockBannedStates') => {
+      if (!account) return;
+      const next = { ...account, [field]: !account[field] };
+      setAccount(next);
+      writeStoredAccount(next);
+    },
+    [account],
+  );
 
+  const handleCopy = useCallback(async (value: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      setCopyFeedback('Link copied to clipboard.');
+      setRoomFeedback('Link copied.');
+      if (navigator.vibrate) navigator.vibrate(20);
     } catch {
-      setCopyFeedback('Copy failed. Please copy manually.');
+      setRoomFeedback('Copy failed.');
     }
   }, [onboardingStatus]);
 

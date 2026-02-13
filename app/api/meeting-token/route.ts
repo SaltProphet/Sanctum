@@ -4,8 +4,6 @@ import { parseJsonResponse, isValidString } from '@/lib/jsonUtils';
 
 const DAILY_MEETING_TOKENS_URL = 'https://api.daily.co/v1/meeting-tokens';
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
-const MAX_TOKEN_TTL_SECONDS = 900;
-
 type JoinRole = 'viewer' | 'creator';
 
 type TokenRequestBody = {
