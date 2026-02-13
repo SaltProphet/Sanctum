@@ -15,7 +15,6 @@ type CreateRoomResponse = {
   name?: string;
   url?: string;
 };
-import { getNightPassRemaining } from '@/lib/countdown';
 
 type BurnerRoom = {
   id: string;
@@ -29,21 +28,9 @@ type CreatorAccount = {
   displayName: string;
   customSlug: string;
   slugChangeUsed: boolean;
-  credits: number;
   rooms: BurnerRoom[];
   onboardingStatus?: BackendCreatorStatus;
   onboardingReferenceId?: string;
-};
-
-type DepositStatus =
-  | 'deposit_missing'
-  | 'deposit_pending'
-  | 'deposit_paid'
-  | 'deposit_failed'
-  | 'deposit_refunded';
-
-type DepositStatusResponse = {
-  status?: DepositStatus;
 };
 
 type AuthMode = 'login' | 'register';
@@ -59,18 +46,19 @@ const ANALYTICS_STORAGE_KEY = 'sanctum.creator.onboarding.analytics';
  */
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(password));
-  // Use for-loop for better performance - avoids intermediate array creation
-  const bytes = new Uint8Array(hashBuffer);
-  let hex = '';
-  for (let i = 0; i < bytes.length; i++) {
-    hex += bytes[i].toString(16).padStart(2, '0');
-  }
-  return hex;
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Verify a password against its hash.
+ * WARNING: This is NOT suitable for production.
+ */
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return (await hashPassword(password)) === hash;
+  const passwordHash = await hashPassword(password);
+  return passwordHash === hash;
 }
 
 function toSlug(input: string): string {
@@ -90,16 +78,19 @@ function isValidSlug(slug: string): boolean {
 
 function readStoredAccount(): CreatorAccount | null {
   const rawAccount = window.localStorage.getItem(ACCOUNT_STORAGE_KEY);
-  if (!rawAccount) return null;
+
+  if (!rawAccount) {
+    return null;
+  }
 
   try {
     const parsed = JSON.parse(rawAccount) as CreatorAccount;
-    if (!parsed.email || !parsed.passwordHash || !parsed.customSlug) return null;
-    return {
-      ...parsed,
-      credits: parsed.credits ?? 3,
-      rooms: parsed.rooms ?? [],
-    };
+
+    if (!parsed.email || !parsed.passwordHash || !parsed.customSlug) {
+      return null;
+    }
+
+    return parsed;
   } catch {
     return null;
   }
@@ -109,18 +100,63 @@ function writeStoredAccount(account: CreatorAccount) {
   window.localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(account));
 }
 
+type PreflightFailure = {
+  gate?: unknown;
+  message?: unknown;
+};
+
+type CreateRoomErrorResponse = {
+  error?: {
+    code?: unknown;
+    message?: unknown;
+    failures?: unknown;
+  };
+};
+
+function parseCreateRoomError(data: unknown): string {
+  if (!data || typeof data !== 'object') {
+    return 'Unable to generate link. Please try again.';
+  }
+
+  const parsed = data as CreateRoomErrorResponse;
+  const errorMessage = typeof parsed.error?.message === 'string' ? parsed.error.message : null;
+
+  if (parsed.error?.code !== 'CREATOR_PREFLIGHT_FAILED') {
+    return errorMessage ?? 'Unable to generate link. Please try again.';
+  }
+
+  const failures = Array.isArray(parsed.error.failures) ? (parsed.error.failures as PreflightFailure[]) : [];
+
+  if (failures.length === 0) {
+    return errorMessage ?? 'Room creation is blocked until creator checks pass.';
+  }
+
+  const details = failures
+    .map((failure) => {
+      const gate =
+        failure.gate === 'payment'
+          ? 'Payment'
+          : failure.gate === 'verification'
+            ? 'Verification'
+            : 'Preflight';
+
+      const message = typeof failure.message === 'string' ? failure.message : 'Check failed.';
+      return `${gate}: ${message}`;
+    })
+    .join(' ');
+
+  return details;
+}
+
 export default function DashboardPage() {
+  const [hydrated, setHydrated] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [sessionEmail, setSessionEmail] = useState('');
   const [account, setAccount] = useState<CreatorAccount | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState('');
-  const [latestUrl, setLatestUrl] = useState('');
-  const [clock, setClock] = useState(Date.now());
-  const [origin, setOrigin] = useState('');
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+
   const [registerName, setRegisterName] = useState('');
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
@@ -136,46 +172,34 @@ export default function DashboardPage() {
   const [onboardingEventMessage, setOnboardingEventMessage] = useState('');
 
   const isAuthed = Boolean(account && sessionEmail && account.email === sessionEmail);
-  const [depositStatus, setDepositStatus] = useState<DepositStatus>('deposit_missing');
-  const [depositFeedback, setDepositFeedback] = useState('');
-  const [isInitiatingDeposit, setIsInitiatingDeposit] = useState(false);
 
   useEffect(() => {
+    setHydrated(true);
+
     const session = window.localStorage.getItem(SESSION_STORAGE_KEY) ?? '';
-    const stored = readStoredAccount();
+    const storedAccount = readStoredAccount();
+
     setSessionEmail(session);
-    setAccount(stored);
-    if (!stored) setAuthMode('register');
-  }, []);
+    setAccount(storedAccount);
 
-  useEffect(() => {
-    setOrigin(window.location.origin);
-    const interval = window.setInterval(() => setClock(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  const refreshDepositStatus = useCallback(async () => {
-    if (!account) {
-      setDepositStatus('deposit_missing');
+    if (!storedAccount) {
+      setAuthMode('register');
       return;
     }
 
-    try {
-      const response = await fetch(`/api/payments/deposit/status?creator_id=${encodeURIComponent(account.customSlug)}`);
-      const data = (await response.json()) as DepositStatusResponse;
-      setDepositStatus(response.ok && data.status ? data.status : 'deposit_missing');
-    } catch {
-      setDepositStatus('deposit_missing');
+    if (storedAccount.customSlug) {
+      setRegisterSlug(storedAccount.customSlug);
+      setNewSlug(storedAccount.customSlug);
     }
 
-    if (account?.onboardingStatus) {
-      setOnboardingStatus(parseBackendCreatorStatus(account.onboardingStatus));
+    if (storedAccount.onboardingStatus) {
+      setOnboardingStatus(parseBackendCreatorStatus(storedAccount.onboardingStatus));
       return;
     }
 
     const envStatus = parseBackendCreatorStatus(process.env.NEXT_PUBLIC_CREATOR_ONBOARDING_STATUS);
     setOnboardingStatus(envStatus);
-  }, [account]);
+  }, []);
 
   useEffect(() => {
     if (!isAuthed || !account) {
@@ -199,81 +223,13 @@ export default function DashboardPage() {
         existingEvents = [];
       }
     }
-    // Keep only last 100 events to prevent unbounded growth
-    const MAX_ANALYTICS_EVENTS = 100;
-    const updatedEvents = [...existingEvents, event].slice(-MAX_ANALYTICS_EVENTS);
-    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify(updatedEvents));
+    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify([...existingEvents, event]));
 
     const { dataLayer } = window as Window & { dataLayer?: unknown[] };
     if (Array.isArray(dataLayer)) {
       dataLayer.push(event);
     }
   }, [account, isAuthed, onboardingStatus]);
-
-  useEffect(() => {
-    if (!isAuthed) {
-      return;
-    }
-
-    void refreshDepositStatus();
-  }, [isAuthed, refreshDepositStatus]);
-
-  const handleInitiateDeposit = useCallback(async () => {
-    if (!account) {
-      return;
-    }
-
-    setIsInitiatingDeposit(true);
-    setDepositFeedback('');
-
-    try {
-      const response = await fetch('/api/payments/deposit/initiate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': `deposit-${account.customSlug}-${Date.now()}`,
-        },
-        body: JSON.stringify({
-          creator_id: account.customSlug,
-          provider: 'stripe',
-          amount: 500,
-          currency: 'USD',
-        }),
-      });
-
-      if (!response.ok) {
-        setDepositFeedback('Unable to initiate deposit. Please retry.');
-        return;
-      }
-
-      setDepositFeedback('Deposit initiated. Room creation unlocks only after confirmed settled/succeeded webhook.');
-      await refreshDepositStatus();
-    } catch {
-      setDepositFeedback('Unable to initiate deposit. Please retry.');
-    } finally {
-      setIsInitiatingDeposit(false);
-    }
-  }, [account, refreshDepositStatus]);
-
-  const depositNextStep = useMemo(() => {
-    if (depositStatus === 'deposit_paid') {
-      return 'Deposit settled. You can generate room links.';
-    }
-
-    if (depositStatus === 'deposit_failed') {
-      return 'Deposit failed. Retry by initiating a new deposit.';
-    }
-
-    if (depositStatus === 'deposit_refunded') {
-      return 'Deposit refunded. Start a new deposit to continue.';
-    }
-
-    if (depositStatus === 'deposit_pending') {
-      return 'Deposit pending. Await provider webhook confirmation.';
-    }
-
-    return 'No deposit yet. Initiate a deposit to continue.';
-  }, [depositStatus]);
 
   const creatorBaseUrl = useMemo(() => {
     if (!isAuthed || !account) {
@@ -288,12 +244,19 @@ export default function DashboardPage() {
   }, [account, isAuthed]);
 
   const handleRegister = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
+    (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      setFeedback('');
+      setAuthFeedback('');
+
       const slug = toSlug(registerSlug || registerName);
-      if (!registerName || !registerEmail || !registerPassword || !slug || !isValidSlug(slug)) {
-        setFeedback('Complete all fields with a valid slug.');
+
+      if (!registerName || !registerEmail || !registerPassword) {
+        setAuthFeedback('All register fields are required.');
+        return;
+      }
+
+      if (!slug || !isValidSlug(slug)) {
+        setAuthFeedback('Choose a valid custom URL slug (letters, numbers, dashes).');
         return;
       }
 
@@ -321,39 +284,25 @@ export default function DashboardPage() {
         setOnboardingStatus('account_created');
         setIsLoading(false);
       });
-      setLoading(true);
-      const passwordHash = await hashPassword(registerPassword);
-      const nextAccount: CreatorAccount = {
-        displayName: registerName,
-        email: registerEmail.toLowerCase(),
-        passwordHash,
-        customSlug: slug,
-        slugChangeUsed: false,
-        credits: 3,
-        rooms: [],
-      };
-      writeStoredAccount(nextAccount);
-      window.localStorage.setItem(SESSION_STORAGE_KEY, nextAccount.email);
-      setAccount(nextAccount);
-      setSessionEmail(nextAccount.email);
-      setLoading(false);
-      setFeedback('Registration complete. Cockpit armed.');
     },
     [registerEmail, registerName, registerPassword, registerSlug],
   );
 
   const handleLogin = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
+    (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      setFeedback('');
-      const stored = readStoredAccount();
-      if (!stored) {
-        setFeedback('No account found. Register first.');
+      setAuthFeedback('');
+
+      const storedAccount = readStoredAccount();
+
+      if (!storedAccount) {
+        setAuthFeedback('No creator account found yet. Please register first.');
         setAuthMode('register');
         return;
       }
-      if (stored.email !== loginEmail.toLowerCase() || !(await verifyPassword(loginPassword, stored.passwordHash))) {
-        setFeedback('Invalid credentials.');
+
+      if (storedAccount.email !== loginEmail.toLowerCase()) {
+        setAuthFeedback('Invalid email or password.');
         return;
       }
 
@@ -374,10 +323,6 @@ export default function DashboardPage() {
         setAuthFeedback('Login successful.');
         setIsLoading(false);
       });
-      window.localStorage.setItem(SESSION_STORAGE_KEY, stored.email);
-      setSessionEmail(stored.email);
-      setAccount(stored);
-      setFeedback('Authenticated.');
     },
     [loginEmail, loginPassword],
   );
@@ -465,10 +410,6 @@ export default function DashboardPage() {
 
     setIsLoading(true);
     setCopyFeedback('');
-  const handleGenerate = useCallback(async () => {
-    if (!account) return;
-    setLoading(true);
-    setFeedback('');
 
     try {
       const response = await fetch('/api/create-room', {
@@ -476,35 +417,50 @@ export default function DashboardPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ creatorIdentityId: account.customSlug }),
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creatorIdentityId: account.email }),
+        body: JSON.stringify({ creatorIdentityId: 'dashboard-creator' }),
       });
-      const body = (await response.json()) as { roomName?: string; url?: string; error?: string };
-      if (!response.ok || !body.roomName || !body.url) {
-        setFeedback(body.error ?? 'Unable to generate safe link.');
-        return;
+
+      const responseData = (await response.json()) as unknown;
+
+      if (!response.ok) {
+        throw new Error(parseCreateRoomError(responseData));
       }
 
-      const room: BurnerRoom = { id: body.roomName, url: body.url, createdAt: new Date().toISOString() };
-      const nextAccount = { ...account, rooms: [room, ...account.rooms] };
-      writeStoredAccount(nextAccount);
-      setAccount(nextAccount);
-      setLatestUrl(body.url);
-      setFeedback('Safe link generated.');
-      if (navigator.vibrate) navigator.vibrate(40);
-    } catch {
-      setFeedback('Unable to generate safe link.');
+      const data = responseData as CreateRoomResponse;
+      const roomName = data.roomName ?? data.name;
+      const canonicalPath = data.url ?? (roomName ? `/room/${roomName}` : '');
+
+      if (!canonicalPath.startsWith('/room/')) {
+        throw new Error('Response missing canonical room URL.');
+      }
+
+      const generatedUrl = `${window.location.origin}${canonicalPath}`;
+      const nextRoom: BurnerRoom = {
+        id: roomName ?? canonicalPath.replace('/room/', ''),
+        createdAt: new Date().toISOString(),
+        url: generatedUrl,
+      };
+
+      const updatedAccount: CreatorAccount = {
+        ...account,
+        rooms: [nextRoom, ...account.rooms].slice(0, 25),
+      };
+
+      writeStoredAccount(updatedAccount);
+      setAccount(updatedAccount);
+      setRoomUrl(generatedUrl);
+    } catch (error) {
+      setRoomUrl('');
+      setCopyFeedback(error instanceof Error ? error.message : 'Unable to generate link. Please try again.');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, [account, onboardingStatus]);
 
-  const handleCopy = useCallback(async (url: string) => {
-    await navigator.clipboard.writeText(`${window.location.origin}${url}`);
-    setFeedback('Link copied.');
-    if (navigator.vibrate) navigator.vibrate([20, 10, 20]);
-  }, []);
+  const handleCopy = useCallback(async (value: string) => {
+    if (!value) {
+      return;
+    }
 
     if (onboardingStatus !== 'active') {
       setCopyFeedback('Copy actions are locked until onboarding status is active.');
@@ -518,67 +474,127 @@ export default function DashboardPage() {
       setCopyFeedback('Copy failed. Please copy manually.');
     }
   }, [onboardingStatus]);
-  const handleLogout = useCallback(() => {
-    window.localStorage.removeItem(SESSION_STORAGE_KEY);
-    setSessionEmail('');
-    setFeedback('Logged out.');
-  }, []);
 
-  const creatorUrl = useMemo(() => {
-    if (!account) return '';
-    return typeof window === 'undefined' ? `/c/${account.customSlug}` : `${window.location.origin}/c/${account.customSlug}`;
-  }, [account]);
+  if (!hydrated) {
+    return null;
+  }
 
-  const onboardingView = useMemo(() => getOnboardingStatusView(onboardingStatus), [onboardingStatus]);
-  const onboardingSteps = useMemo(() => buildOnboardingSteps(onboardingStatus), [onboardingStatus]);
-  const isDashboardLocked = useMemo(() => onboardingStatus !== 'active', [onboardingStatus]);
+  const onboardingView = getOnboardingStatusView(onboardingStatus);
+  const onboardingSteps = buildOnboardingSteps(onboardingStatus);
+  const isDashboardLocked = onboardingStatus !== 'active';
 
   if (!isAuthed) {
     return (
-      <main className="min-h-[100dvh] bg-void px-6 py-8 text-slate-100">
-        <section className="mx-auto w-full max-w-md rounded-2xl border border-slate-800 bg-black p-6">
-          <h1 className="text-2xl font-semibold text-neon-green">The Iron Gate</h1>
-          <p className="mt-2 text-sm text-slate-400">Federal law requires verified creator identity before activation.</p>
-          <div className="mt-5 flex gap-2">
-            <button className={`flex-1 rounded-md px-3 py-2 ${authMode === 'login' ? 'bg-neon-green text-black' : 'bg-slate-900'}`} onClick={() => setAuthMode('login')}>Login</button>
-            <button className={`flex-1 rounded-md px-3 py-2 ${authMode === 'register' ? 'bg-neon-green text-black' : 'bg-slate-900'}`} onClick={() => setAuthMode('register')}>Register</button>
+      <main className="min-h-screen bg-black px-6 py-10 text-slate-100">
+        <section className="mx-auto w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+          <h1 className="mb-5 text-2xl font-bold text-neon-green">Creator Access</h1>
+
+          <div className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-950 p-1">
+            <button
+              type="button"
+              onClick={() => setAuthMode('login')}
+              className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                authMode === 'login' ? 'bg-neon-green text-black' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuthMode('register')}
+              className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                authMode === 'register'
+                  ? 'bg-neon-green text-black'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              Register
+            </button>
           </div>
 
           {authMode === 'login' ? (
-            <form className="mt-4 space-y-3" onSubmit={handleLogin}>
-              <input className="w-full rounded-md border border-slate-700 bg-void px-3 py-2" type="email" placeholder="Email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
-              <input className="w-full rounded-md border border-slate-700 bg-void px-3 py-2" type="password" placeholder="Password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
-              <button className="w-full rounded-md bg-neon-green px-4 py-3 font-semibold text-black" disabled={loading}>Authenticate</button>
+            <form onSubmit={handleLogin} className="space-y-3">
+              <input
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                type="email"
+                placeholder="Email"
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
+              />
+              <input
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                type="password"
+                placeholder="Password"
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
+              />
+              <button
+                type="submit"
+                className="w-full rounded-md bg-neon-green px-4 py-2 font-semibold text-black"
+              >
+                Log in to dashboard
+              </button>
             </form>
           ) : (
-            <form className="mt-4 space-y-3" onSubmit={handleRegister}>
-              <input className="w-full rounded-md border border-slate-700 bg-void px-3 py-2" type="text" placeholder="Display name" value={registerName} onChange={(e) => setRegisterName(e.target.value)} />
-              <input className="w-full rounded-md border border-slate-700 bg-void px-3 py-2" type="email" placeholder="Email" value={registerEmail} onChange={(e) => setRegisterEmail(e.target.value)} />
-              <input className="w-full rounded-md border border-slate-700 bg-void px-3 py-2" type="password" placeholder="Password" value={registerPassword} onChange={(e) => setRegisterPassword(e.target.value)} />
-              <input className="w-full rounded-md border border-slate-700 bg-void px-3 py-2" type="text" placeholder="Custom slug" value={registerSlug} onChange={(e) => setRegisterSlug(e.target.value)} />
-              <button className="w-full rounded-md bg-neon-green px-4 py-3 font-semibold text-black" disabled={loading}>Create account</button>
+            <form onSubmit={handleRegister} className="space-y-3">
+              <input
+                value={registerName}
+                onChange={(event) => setRegisterName(event.target.value)}
+                type="text"
+                placeholder="Display name"
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
+              />
+              <input
+                value={registerEmail}
+                onChange={(event) => setRegisterEmail(event.target.value)}
+                type="email"
+                placeholder="Email"
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
+              />
+              <input
+                value={registerPassword}
+                onChange={(event) => setRegisterPassword(event.target.value)}
+                type="password"
+                placeholder="Password"
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
+              />
+              <input
+                value={registerSlug}
+                onChange={(event) => setRegisterSlug(event.target.value)}
+                type="text"
+                placeholder="Custom URL slug (e.g. star-coach)"
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
+              />
+              <button
+                type="submit"
+                className="w-full rounded-md bg-neon-green px-4 py-2 font-semibold text-black"
+              >
+                Register and open dashboard
+              </button>
             </form>
           )}
 
-          {feedback ? <p className="mt-3 text-sm text-slate-300">{feedback}</p> : null}
-          <Link href="/" className="mt-4 inline-block text-sm text-slate-400 underline">Back to site</Link>
+          {authFeedback ? <p className="mt-3 text-sm text-slate-300">{authFeedback}</p> : null}
         </section>
       </main>
     );
   }
 
   return (
-    <main className="min-h-[100dvh] bg-void px-4 py-6 text-slate-100">
-      <section className="mx-auto w-full max-w-xl space-y-4 rounded-2xl border border-slate-800 bg-black p-4">
-        <header className="flex items-start justify-between">
+    <main className="min-h-screen bg-black px-6 py-10 text-slate-100">
+      <section className="mx-auto w-full max-w-3xl space-y-6 rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="mono-data text-xs uppercase tracking-[0.3em] text-neon-green">Creator cockpit</p>
-            <h1 className="text-xl font-semibold">The Sovereign Gate</h1>
+            <h1 className="text-2xl font-bold text-neon-green">Creator Dashboard</h1>
+            <p className="text-sm text-slate-300">Welcome back, {account?.displayName}.</p>
           </div>
-          <div className="rounded-md border border-neon-green/60 bg-neon-green/10 px-3 py-2 text-right">
-            <p className="mono-data text-xs text-slate-300">Credits</p>
-            <p className="mono-data text-lg font-semibold text-neon-green">{account?.credits ?? 0}</p>
-          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-md border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800"
+          >
+            Log out
+          </button>
         </header>
 
         <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
@@ -644,33 +660,13 @@ export default function DashboardPage() {
               onClick={handleSlugUpdate}
               disabled={isDashboardLocked}
               className="rounded-md bg-slate-200 px-4 py-2 text-sm font-semibold text-black"
-          <h2 className="text-lg font-semibold text-slate-50">Deposit status</h2>
-          <p className="mt-2 text-sm text-slate-300">
-            Current status: <span className="font-semibold text-neon-green">{depositStatus}</span>
-          </p>
-          <p className="mt-2 text-sm text-slate-400">{depositNextStep}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void refreshDepositStatus()}
-              className="rounded-md border border-slate-600 px-3 py-2 text-sm"
             >
-              Refresh status
+              Save one-time change
             </button>
-            {(depositStatus === 'deposit_missing' ||
-              depositStatus === 'deposit_failed' ||
-              depositStatus === 'deposit_refunded') && (
-              <button
-                type="button"
-                disabled={isInitiatingDeposit}
-                onClick={() => void handleInitiateDeposit()}
-                className="rounded-md bg-neon-green px-3 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:bg-slate-500"
-              >
-                {isInitiatingDeposit ? 'Starting...' : 'Initiate deposit'}
-              </button>
-            )}
           </div>
-          {depositFeedback ? <p className="mt-2 text-sm text-slate-300">{depositFeedback}</p> : null}
+          <p className="mt-2 text-xs text-slate-400">
+            One included custom URL change: {account?.slugChangeUsed ? 'Used' : 'Available'}.
+          </p>
         </div>
 
         <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? 'opacity-60' : ''}`}>
@@ -694,23 +690,10 @@ export default function DashboardPage() {
               >
                 Copy latest URL
               </button>
-        <button
-          onClick={handleGenerate}
-          disabled={loading}
-          className="mono-data w-full rounded-xl border border-neon-green bg-neon-green/10 px-4 py-8 text-lg font-semibold tracking-[0.2em] text-neon-green transition hover:bg-neon-green/20"
-        >
-          {loading ? 'GENERATING…' : '[ GENERATE SAFE LINK ]'}
-        </button>
-
-        {latestUrl ? (
-          <div className="rounded-lg border border-slate-800 bg-void p-3">
-            <p className="mono-data break-all text-sm text-neon-green">{origin}{latestUrl}</p>
-            <div className="mt-2 flex gap-2">
-              <button onClick={() => handleCopy(latestUrl)} className="rounded-md border border-slate-700 px-3 py-2 text-xs">Copy link</button>
-              <Link href={latestUrl} className="rounded-md border border-neon-green px-3 py-2 text-xs text-neon-green">Open room</Link>
             </div>
-          </div>
-        ) : null}
+          ) : null}
+          {copyFeedback ? <p className="mt-2 text-sm text-slate-300">{copyFeedback}</p> : null}
+        </div>
 
         <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? 'opacity-60' : ''}`}>
           <h2 className="text-lg font-semibold text-slate-50">Your room URLs</h2>
@@ -743,30 +726,15 @@ export default function DashboardPage() {
                       </Link>
                     )}
                   </div>
-        <section className="rounded-lg border border-slate-800 bg-void p-3">
-          <p className="mono-data text-xs uppercase tracking-[0.2em] text-slate-400">Active rooms</p>
-          {account?.rooms.length ? (
-            <ul className="mt-3 space-y-2">
-              {account.rooms.map((room) => (
-                <li key={room.id} className="rounded-md border border-slate-800 bg-black p-3">
-                  <p className="mono-data break-all text-sm text-neon-green">{origin}{room.url}</p>
-                  <p className="mono-data mt-1 text-xs text-slate-400">Expires in {getNightPassRemaining(room.createdAt, clock)}</p>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-2 text-sm text-slate-400">No active rooms.</p>
+            <p className="mt-2 text-sm text-slate-400">
+              No burner rooms yet. Generate your first room URL above.
+            </p>
           )}
-        </section>
-
-        <div className="rounded-lg border border-slate-800 bg-void p-3">
-          <p className="mono-data text-xs text-slate-400">Static link</p>
-          <p className="mono-data mt-1 break-all text-sm text-neon-green">{creatorUrl}</p>
         </div>
-
-        {feedback ? <p className="text-sm text-slate-300">{feedback}</p> : null}
-
-        <button onClick={handleLogout} className="w-full rounded-md border border-danger px-3 py-2 text-sm text-red-400">Logout</button>
       </section>
     </main>
   );

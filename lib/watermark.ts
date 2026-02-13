@@ -12,6 +12,16 @@ type BrandingWatermarkOptions = {
 
 const SANCTUM_WATERMARK_SRC = '/SanctumLogo.png';
 const DEFAULT_CUSTOM_WATERMARK_SRC = '/UserUpload.png';
+const SESSION_COOKIE_NAME = 'sanctum_viewer_session';
+const TILE_COUNT = 18;
+
+export type WatermarkTile = {
+  id: string;
+  topPercent: number;
+  leftPercent: number;
+  rotateDeg: number;
+  opacity: number;
+};
 
 export function resolveCreatorTier(tierParam: string | null): CreatorTier {
   if (tierParam === '3' || tierParam === 'empire') {
@@ -46,28 +56,43 @@ export function getBrandingWatermark({ tierParam, customLogoUrlParam }: Branding
     alt: 'Powered by Sanctum watermark',
   };
 }
-'use server';
-
-import crypto from 'node:crypto';
-import { isIP } from 'node:net';
-
-const SESSION_COOKIE_NAME = 'sanctum_viewer_session';
-const TILE_COUNT = 18;
-
-export type WatermarkTile = {
-  id: string;
-  topPercent: number;
-  leftPercent: number;
-  rotateDeg: number;
-  opacity: number;
-};
 
 function getHashSecret() {
   return process.env.WATERMARK_HASH_SECRET || process.env.DAILY_API_KEY || 'sanctum-dev-secret';
 }
 
-function computeHmacHash(value: string) {
-  return crypto.createHmac('sha256', getHashSecret()).update(value).digest('hex');
+function computeHmacHash(value: string): string {
+  const input = `${getHashSecret()}:${value}`;
+  let hashA = 5381;
+  let hashB = 52711;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const code = input.charCodeAt(index);
+    hashA = (hashA * 33) ^ code;
+    hashB = (hashB * 31) ^ (code << 1);
+  }
+
+  return `${(hashA >>> 0).toString(16).padStart(8, '0')}${(hashB >>> 0).toString(16).padStart(8, '0')}`.repeat(4);
+}
+
+function isValidIpv4(value: string): boolean {
+  const parts = value.split('.');
+  if (parts.length !== 4) {
+    return false;
+  }
+
+  return parts.every((part) => {
+    if (!/^\d{1,3}$/.test(part)) {
+      return false;
+    }
+
+    const parsed = Number.parseInt(part, 10);
+    return parsed >= 0 && parsed <= 255;
+  });
+}
+
+function isValidIpv6(value: string): boolean {
+  return value.includes(':') && /^[0-9a-fA-F:]+$/.test(value);
 }
 
 function sanitizeIp(rawIp: string | null): string | null {
@@ -80,7 +105,7 @@ function sanitizeIp(rawIp: string | null): string | null {
     return null;
   }
 
-  return isIP(candidate) ? candidate : null;
+  return isValidIpv4(candidate) || isValidIpv6(candidate) ? candidate : null;
 }
 
 export function resolveClientIpFromHeaders(headerMap: Headers): string | null {
@@ -100,11 +125,11 @@ export function resolveClientIpFromHeaders(headerMap: Headers): string | null {
   return null;
 }
 
-export function buildWatermarkText(sessionId: string, ipHash: string) {
+export function buildWatermarkText(sessionId: string, ipHash: string): string {
   return `DO NOT RECORD • SESSION ${sessionId.slice(0, 8)} • IP_HASH ${ipHash.slice(0, 12)}`;
 }
 
-function extractByteValueFromHash(seedHash: string, index: number) {
+function extractByteValueFromHash(seedHash: string, index: number): number {
   const start = index * 2;
   const pair = seedHash.slice(start, start + 2);
   return Number.parseInt(pair, 16);
@@ -157,7 +182,7 @@ export function logWatermarkMapping(sessionId: string, clientIpHash: string, roo
 }
 
 export function createViewerSessionId(): string {
-  return crypto.randomUUID();
+  return globalThis.crypto.randomUUID();
 }
 
 export { SESSION_COOKIE_NAME };
