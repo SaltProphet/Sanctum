@@ -1,9 +1,16 @@
 'use client';
 
-import type { WatermarkTile } from '@/lib/watermark';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import DailyIframe from '@daily-co/daily-js';
+
+type WatermarkTile = {
+  id: string;
+  topPercent: number;
+  leftPercent: number;
+  rotateDeg: number;
+  opacity: number;
+};
 
 type RoomClientProps = {
   roomId: string;
