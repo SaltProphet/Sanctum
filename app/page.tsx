@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { appRoutes } from '@/lib/routes';
 
 export default function HomePage() {
   return (
@@ -16,12 +17,12 @@ export default function HomePage() {
 
         <div className="space-y-3">
           <Link
-            href="/dashboard"
+            href={appRoutes.dashboard()}
             className="inline-flex w-full items-center justify-center rounded-lg border border-neon-green bg-neon-green px-5 py-4 text-base font-semibold text-black transition hover:shadow-[0_0_24px_rgba(0,255,65,0.45)]"
           >
             SECURE YOUR ROOM
           </Link>
-          <Link href="/terms" className="inline-block text-sm text-slate-400 underline underline-offset-4 hover:text-slate-200">
+          <Link href={appRoutes.terms()} className="inline-block text-sm text-slate-400 underline underline-offset-4 hover:text-slate-200">
             Terms of service
           </Link>
         </div>

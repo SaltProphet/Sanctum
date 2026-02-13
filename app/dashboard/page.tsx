@@ -235,7 +235,7 @@ export default function DashboardPage() {
       return `/c/${account.customSlug}`;
     }
 
-    return `${window.location.origin}/c/${account.customSlug}`;
+    return toAbsoluteAppUrl(appRoutes.creator(account.customSlug), window.location.origin);
   }, [account, isAuthed]);
 
   const handleRegister = useCallback(
@@ -365,15 +365,15 @@ export default function DashboardPage() {
 
       const data = responseData as CreateRoomResponse;
       const roomName = data.roomName ?? data.name;
-      const canonicalPath = data.url ?? (roomName ? `/room/${roomName}` : '');
+      const canonicalPath = data.url ?? (roomName ? appRoutes.room(roomName) : '');
 
-      if (!canonicalPath.startsWith('/room/')) {
+      if (!canonicalPath.includes('/room/')) {
         throw new Error('Response missing canonical room URL.');
       }
 
-      const generatedUrl = `${window.location.origin}${canonicalPath}`;
+      const generatedUrl = toAbsoluteAppUrl(canonicalPath, window.location.origin);
       const nextRoom: BurnerRoom = {
-        id: roomName ?? canonicalPath.replace('/room/', ''),
+        id: roomName ?? canonicalPath.split('/room/').pop() ?? '',
         createdAt: new Date().toISOString(),
         url: generatedUrl,
       };
@@ -691,7 +691,7 @@ export default function DashboardPage() {
                       </span>
                     ) : (
                       <Link
-                        href={`/room/${room.id}`}
+                        href={appRoutes.room(room.id)}
                         className="rounded border border-neon-green px-2 py-1 text-xs text-neon-green"
                       >
                         Open room

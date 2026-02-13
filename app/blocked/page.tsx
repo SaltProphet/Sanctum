@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { appRoutes, externalRoutes } from '@/lib/routes';
 
 export default function BlockedPage() {
   return (
@@ -13,13 +14,13 @@ export default function BlockedPage() {
         </p>
         <div className="flex flex-col gap-3 pt-2 sm:flex-row">
           <Link
-            href="mailto:support@sanctum.app"
+            href={externalRoutes.supportEmail}
             className="inline-flex items-center justify-center rounded-lg border border-slate-700 px-5 py-3 text-sm font-medium text-slate-100 transition hover:border-slate-500 hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
             Contact support for appeals
           </Link>
           <Link
-            href="/"
+            href={appRoutes.home()}
             className="inline-flex items-center justify-center rounded-lg border border-neon-green bg-neon-green px-5 py-3 text-sm font-semibold text-black shadow-[0_0_24px_rgba(57,255,20,0.65)] transition hover:bg-neon-green/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neon-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
             Back to home
