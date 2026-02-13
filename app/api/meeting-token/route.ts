@@ -1,12 +1,8 @@
 import type { NextRequest } from 'next/server';
-import { parseResponseBodyAsJson } from '@/lib/jsonUtils';
-
 import { parseJsonResponse, isValidString } from '@/lib/jsonUtils';
 
 const DAILY_MEETING_TOKENS_URL = 'https://api.daily.co/v1/meeting-tokens';
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
-const MAX_TOKEN_TTL_SECONDS = 900;
-
 type JoinRole = 'viewer' | 'creator';
 
 type TokenRequestBody = {
@@ -36,7 +32,7 @@ function hasRequiredEntitlements(request: NextRequest): boolean {
   return hasPurchase && hasVerification;
 }
 
-export function getTokenExpiration(nowEpochSeconds: number, roomExpiration: number): number | null {
+function getTokenExpiration(nowEpochSeconds: number, roomExpiration: number): number | null {
   const maxTokenExpiration = nowEpochSeconds + MAX_TOKEN_TTL_SECONDS;
   const boundedExpiration = Math.min(maxTokenExpiration, roomExpiration);
 
@@ -70,7 +66,6 @@ async function fetchRoomExpiration(roomName: string, apiKey: string): Promise<nu
     return null;
   }
 
-  const roomBody = (await parseResponseBodyAsJson(roomResponse)) as DailyRoomDetailsResponse | null;
   const roomBody = (await parseJsonResponse(roomResponse)) as DailyRoomDetailsResponse | null;
   const roomExpiration = roomBody?.config?.exp;
 
@@ -139,7 +134,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     return Response.json({ error: 'Failed to reach Daily meeting token API.' }, { status: 502 });
   }
 
-  const tokenBody = await parseResponseBodyAsJson(tokenResponse);
   const tokenBody = await parseJsonResponse(tokenResponse);
 
   if (!tokenResponse.ok) {

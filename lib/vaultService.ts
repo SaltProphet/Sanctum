@@ -82,7 +82,7 @@ const IV_LENGTH = 12;
 
 const isReadAllowed = (role: VaultRole) => role === 'admin' || role === 'compliance' || role === 'system';
 const isDeleteAllowed = (role: VaultRole) => role === 'admin' || role === 'compliance' || role === 'system';
-const isWriteAllowed = (_role: VaultRole) => true;
+const isWriteAllowed = (role: VaultRole) => Boolean(role);
 
 const toMetadataHeaders = (metadata: VerificationMetadata): Record<string, string> => ({
   'capture-timestamp': metadata.captureTimestamp,
