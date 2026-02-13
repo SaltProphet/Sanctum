@@ -75,16 +75,16 @@ export function clearClientEphemeralStorage(): void {
     const keysToRemove: string[] = [];
 
     for (let index = 0; index < storage.length; index += 1) {
-      const key = storage.key(index);
-      if (!key) {
+      const storageKey = storage.key(index);
+      if (!storageKey) {
         continue;
       }
 
-      if (CLIENT_EPHEMERAL_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))) {
-        keysToRemove.push(key);
+      if (CLIENT_EPHEMERAL_KEY_PREFIXES.some((prefix) => storageKey.startsWith(prefix))) {
+        keysToRemove.push(storageKey);
       }
     }
 
-    keysToRemove.forEach((key) => storage.removeItem(key));
+    keysToRemove.forEach((storageKey) => storage.removeItem(storageKey));
   }
 }
