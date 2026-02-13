@@ -1,3 +1,4 @@
+import { isValidString } from '@/lib/jsonUtils';
 import { getCreatorOnboardingRecord, transitionCreatorOnboardingStatus } from '@/lib/onboardingStateMachine';
 import { isVeriffSuccessPayload, verifyVeriffWebhookSignature, type VeriffWebhookPayload } from '@/lib/veriffWebhook';
 
@@ -27,7 +28,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ received: true, ignored: true });
   }
 
-  if (typeof payload.creatorId !== 'string' || payload.creatorId.trim().length === 0) {
+  if (!isValidString(payload.creatorId) || !isValidString(payload.creatorId.trim())) {
     return Response.json({ error: 'Payload is missing creatorId.' }, { status: 400 });
   }
 
