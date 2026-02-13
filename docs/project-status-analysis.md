@@ -16,7 +16,7 @@ Sanctum has a solid foundation for a creator-focused gated video platform built 
 
 ## 2) What is implemented today
 
-## 2.1 Application surfaces
+### 2.1 Application surfaces
 
 ### Web pages (App Router)
 - `/` landing page
@@ -40,7 +40,7 @@ Sanctum has a solid foundation for a creator-focused gated video platform built 
 - `POST /api/rooms/[roomId]/panic`
 - `GET /api/rooms/[roomId]/panic/stream`
 
-## 2.2 Domain capabilities already present
+### 2.2 Domain capabilities already present
 
 ### Creator and onboarding controls
 - Creator preflight gate with payment + verification provider abstraction before room creation
@@ -63,15 +63,15 @@ Sanctum has a solid foundation for a creator-focused gated video platform built 
 
 ## 3) Quality signal snapshot
 
-## 3.1 Automated tests
+### 3.1 Automated tests
 
 `npm test` currently executes and passes most domain tests, but the run fails overall due to two hard failures:
-1. **Module resolution/import issue** involving `lib/creatorGate.ts` importing `lib/payments` without a resolvable extension in current Node test execution mode.
+1. **Module resolution/import issue** involving `lib/creatorGate.ts` importing `./payments` without a resolvable extension in current Node test execution mode.
 2. **Syntax error in `lib/watermark.ts`** (`watermarkId` declared twice in `getWatermarkMetadata`).
 
 Result: **45 passing tests, 2 failing tests** in current environment.
 
-## 3.2 Lint and build
+### 3.2 Lint and build
 
 - `npm run lint` fails on a parse error in `app/dashboard/page.tsx`.
 - `npm run build` fails with the same dashboard parsing/async issues plus the duplicate declaration in `lib/watermark.ts`.
@@ -100,13 +100,13 @@ Result: **Not deployment-ready** until blockers are fixed.
 
 ## 5) Recommended remediation plan
 
-## Phase 1 — Stabilize compile and tests (highest priority)
+### Phase 1 — Stabilize compile and tests (highest priority)
 1. Fix `app/dashboard/page.tsx` handler syntax and async callback signatures.
 2. Remove duplicate `watermarkId` declaration in `lib/watermark.ts`.
 3. Normalize test-time module imports for Node ESM (`.ts` extension strategy or package/module config alignment).
 4. Re-run `npm test`, `npm run lint`, and `npm run build` until green.
 
-## Phase 2 — Hardening and consistency
+### Phase 2 — Hardening and consistency
 1. Canonicalize webhook route usage and deprecate duplicates if unnecessary.
 2. Add integration-level checks for key API routes:
    - create-room preflight deny/allow
@@ -114,7 +114,7 @@ Result: **Not deployment-ready** until blockers are fixed.
    - panic route behavior and stream behavior
 3. Expand smoke-check docs to include currently used canonical routes (`/dashboard`, `/room/[roomId]`, onboarding/payment APIs).
 
-## Phase 3 — Documentation and operational readiness
+### Phase 3 — Documentation and operational readiness
 1. Refresh README with current architecture (creator gating, webhook processors, panic controls).
 2. Add an environment matrix (required, optional, preview-only vars).
 3. Add runbook sections for incident handling:
