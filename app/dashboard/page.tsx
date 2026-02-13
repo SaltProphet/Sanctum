@@ -326,7 +326,8 @@ export default function DashboardPage() {
 
       setIsLoading(true);
 
-      hashPassword(registerPassword).then((passwordHash) => {
+      try {
+        const passwordHash = await hashPassword(registerPassword);
         const nextAccount: CreatorAccount = {
           displayName: registerName,
           email: registerEmail.toLowerCase(),
@@ -334,6 +335,7 @@ export default function DashboardPage() {
           customSlug: slug,
           slugChangeUsed: false,
           rooms: [],
+          credits: 3,
           onboardingStatus: "account_created",
           onboardingReferenceId: `REF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         };
@@ -346,25 +348,10 @@ export default function DashboardPage() {
         setNewSlug(nextAccount.customSlug);
         setAuthFeedback("Registration complete. Welcome to your dashboard.");
         setOnboardingStatus("account_created");
+        setFeedback("Registration complete. Cockpit armed.");
+      } finally {
         setIsLoading(false);
-      });
-      setLoading(true);
-      const passwordHash = await hashPassword(registerPassword);
-      const nextAccount: CreatorAccount = {
-        displayName: registerName,
-        email: registerEmail.toLowerCase(),
-        passwordHash,
-        customSlug: slug,
-        slugChangeUsed: false,
-        credits: 3,
-        rooms: [],
-      };
-      writeStoredAccount(nextAccount);
-      window.localStorage.setItem(SESSION_STORAGE_KEY, nextAccount.email);
-      setAccount(nextAccount);
-      setSessionEmail(nextAccount.email);
-      setLoading(false);
-      setFeedback("Registration complete. Cockpit armed.");
+      }
     },
     [registerEmail, registerName, registerPassword, registerSlug],
   );
