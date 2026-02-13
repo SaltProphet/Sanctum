@@ -320,6 +320,9 @@ export default function DashboardPage() {
         setNewSlug(storedAccount.customSlug);
         setOnboardingStatus(parseBackendCreatorStatus(storedAccount.onboardingStatus));
         setAuthFeedback("Login successful.");
+      } catch (error) {
+        console.error("Error during login:", error);
+        setAuthFeedback("Something went wrong while logging in. Please try again.");
       } finally {
         setIsLoading(false);
       }
