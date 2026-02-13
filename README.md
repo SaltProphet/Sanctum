@@ -61,6 +61,15 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 npm run build
 ```
 
+### Vercel Deployment Guardrail
+
+This repo uses `vercel.json` + `scripts/vercel-ignore.sh` to reduce deployment usage:
+
+- Production deployments continue only when the branch is `main`
+- Preview/non-production deployments are skipped by default
+
+If you need a preview deploy temporarily, update `scripts/vercel-ignore.sh` with your desired branch policy.
+
 ### Start Production Server
 
 ```bash
