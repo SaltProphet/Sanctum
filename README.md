@@ -38,7 +38,7 @@ A modern, dark mode, mobile-first web application built with Next.js, TypeScript
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+ 
+- Node.js 20+ 
 - npm or yarn
 
 ### Installation
