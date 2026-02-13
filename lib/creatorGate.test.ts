@@ -5,12 +5,19 @@ import {
   evaluateCreatorPreflight,
   type PaymentProvider,
   type VerificationProvider,
+  type PreflightFailureCode,
 } from './creatorGate.ts';
 
-function createPaymentProvider(state: 'settled' | 'unsettled'): PaymentProvider {
+function createPaymentProvider(
+  state: 'settled' | 'unsettled',
+  failureCode: PreflightFailureCode | null = null,
+): PaymentProvider {
   return {
     async getSettlementState() {
       return state;
+    },
+    async getFailureCode() {
+      return failureCode;
     },
   };
 }
@@ -48,9 +55,24 @@ test('preflight blocks creator when payment settlement is incomplete', async () 
     {
       gate: 'payment',
       code: 'PAYMENT_UNSETTLED',
-      message: 'Payment settlement is not complete for this creator identity.',
+      message: 'Deposit is pending settlement. Wait for provider confirmation webhook.',
     },
   ]);
+});
+
+test('preflight returns retryable failure message for failed deposits', async () => {
+  const result = await evaluateCreatorPreflight({
+    creatorIdentityId: 'creator-123',
+    paymentProvider: createPaymentProvider('unsettled', 'PAYMENT_FAILED_RETRYABLE'),
+    verificationProvider: createVerificationProvider('verified'),
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.failures[0], {
+    gate: 'payment',
+    code: 'PAYMENT_FAILED_RETRYABLE',
+    message: 'Deposit failed. Retry by initiating a new deposit.',
+  });
 });
 
 test('preflight returns both failures when payment and verification fail', async () => {
@@ -65,7 +87,7 @@ test('preflight returns both failures when payment and verification fail', async
     {
       gate: 'payment',
       code: 'PAYMENT_UNSETTLED',
-      message: 'Payment settlement is not complete for this creator identity.',
+      message: 'Deposit is pending settlement. Wait for provider confirmation webhook.',
     },
     {
       gate: 'verification',
