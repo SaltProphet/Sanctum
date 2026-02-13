@@ -1,25 +1,31 @@
-import Link from "next/link";
+import Link from 'next/link';
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-black px-6 py-12 text-slate-100">
-      <div className="mx-auto flex min-h-[80vh] w-full max-w-md flex-col items-start justify-center gap-6">
-        <h1 className="text-4xl font-bold leading-tight text-slate-50">
-          Sanctum: Secure Disposable Video
-        </h1>
-        <p className="text-base leading-relaxed text-slate-300">
-          No logs. No recordings. Links expire in 30 minutes.
-        </p>
-        <Link
-          href="/dashboard"
-          className="inline-flex w-full items-center justify-center rounded-lg border border-neon-green bg-neon-green px-5 py-3 text-base font-semibold text-black shadow-[0_0_24px_rgba(57,255,20,0.65)] transition hover:bg-neon-green/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neon-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-        >
-          Creator Dashboard
-        </Link>
-        <Link href="/terms" className="text-sm text-slate-300 underline underline-offset-2 hover:text-slate-100">
-          Review Terms of Service
-        </Link>
-      </div>
+    <main className="min-h-[100dvh] bg-void px-6 py-10 text-slate-100">
+      <section className="mx-auto flex min-h-[88dvh] w-full max-w-4xl flex-col justify-between rounded-2xl border border-slate-800 bg-black p-8">
+        <div className="space-y-6">
+          <p className="mono-data text-xs uppercase tracking-[0.35em] text-neon-green">Sanctum // Secure Infrastructure</p>
+          <h1 className="max-w-2xl text-4xl font-semibold leading-tight text-slate-50 sm:text-5xl">
+            Secure, Ephemeral Video Conferencing for Independent Consultants.
+          </h1>
+          <p className="max-w-xl text-base leading-relaxed text-slate-400">
+            Fire your manager. Keep 100%. The secure video room designed as a digital safe house.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <Link
+            href="/dashboard"
+            className="inline-flex w-full items-center justify-center rounded-lg border border-neon-green bg-neon-green px-5 py-4 text-base font-semibold text-black transition hover:shadow-[0_0_24px_rgba(0,255,65,0.45)]"
+          >
+            Claim Your Safe Room
+          </Link>
+          <Link href="/terms" className="inline-block text-sm text-slate-400 underline underline-offset-4 hover:text-slate-200">
+            Terms of service
+          </Link>
+        </div>
+      </section>
     </main>
   );
 }
