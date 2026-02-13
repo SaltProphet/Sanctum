@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { parseJsonResponse, isValidString } from '@/lib/jsonUtils';
+import { getTokenExpiration } from '@/lib/meetingToken';
 
 const DAILY_MEETING_TOKENS_URL = 'https://api.daily.co/v1/meeting-tokens';
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
@@ -30,17 +31,6 @@ function hasRequiredEntitlements(request: NextRequest): boolean {
     parseBoolean(request.cookies.get('sanctum_user_verified')?.value);
 
   return hasPurchase && hasVerification;
-}
-
-function getTokenExpiration(nowEpochSeconds: number, roomExpiration: number): number | null {
-  const maxTokenExpiration = nowEpochSeconds + MAX_TOKEN_TTL_SECONDS;
-  const boundedExpiration = Math.min(maxTokenExpiration, roomExpiration);
-
-  if (boundedExpiration <= nowEpochSeconds) {
-    return null;
-  }
-
-  return boundedExpiration;
 }
 
 function getRole(input: unknown): JoinRole {
