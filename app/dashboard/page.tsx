@@ -205,8 +205,17 @@ export default function DashboardPage() {
     };
 
     const rawEvents = window.localStorage.getItem(ANALYTICS_STORAGE_KEY);
-    const existingEvents = rawEvents ? ((JSON.parse(rawEvents) as unknown[] | null) ?? []) : [];
-    const safeEvents = Array.isArray(existingEvents) ? existingEvents : [];
+    let safeEvents: unknown[] = [];
+    if (rawEvents) {
+      try {
+        const parsed = JSON.parse(rawEvents) as unknown;
+        if (Array.isArray(parsed)) {
+          safeEvents = parsed;
+        }
+      } catch {
+        safeEvents = [];
+      }
+    }
     window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify([...safeEvents, event]));
 
     const { dataLayer } = window as Window & { dataLayer?: unknown[] };
