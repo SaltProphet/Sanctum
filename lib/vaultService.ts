@@ -105,11 +105,11 @@ class SensitiveFieldEncryptor {
   private readonly encryptionKeyBuffer: Buffer;
 
   constructor(keyMaterial: string) {
-    const encryptionKeyBuffer = Buffer.from(keyMaterial, 'base64');
-    if (encryptionKeyBuffer.byteLength !== 32) {
+    const decodedKey = Buffer.from(keyMaterial, 'base64');
+    if (decodedKey.byteLength !== 32) {
       throw new Error('Vault encryption key must be 32 bytes (base64 encoded).');
     }
-    this.encryptionKeyBuffer = encryptionKeyBuffer;
+    this.encryptionKeyBuffer = decodedKey;
   }
 
   encrypt(input: SensitiveVerificationFields): EncryptedPayload {
