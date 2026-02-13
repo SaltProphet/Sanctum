@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import DailyIframe from '@daily-co/daily-js';
+import { appRoutes, externalRoutes } from '@/lib/routes';
 
 type WatermarkTile = {
   id: string;
@@ -56,14 +57,14 @@ export default function RoomClient({ roomId, watermarkText, watermarkTiles }: Ro
   const handlePanicLeave = useCallback(() => {
     const currentCall = callObjectRef.current;
     if (!currentCall) {
-      window.location.href = 'https://google.com';
+      window.location.href = externalRoutes.panicRedirect;
       return;
     }
 
     void currentCall.leave().finally(() => {
       currentCall.destroy();
       callObjectRef.current = null;
-      window.location.href = 'https://google.com';
+      window.location.href = externalRoutes.panicRedirect;
     });
   }, []);
 
@@ -72,7 +73,7 @@ export default function RoomClient({ roomId, watermarkText, watermarkTiles }: Ro
       <main className="flex h-[100dvh] items-center justify-center bg-black px-6 text-center">
         <div>
           <h1 className="text-2xl font-semibold text-white">Configuration Error</h1>
-          <button type="button" onClick={() => router.push('/')} className="mt-4 rounded-md bg-neon-green px-4 py-2 font-semibold text-black">
+          <button type="button" onClick={() => router.push(appRoutes.home())} className="mt-4 rounded-md bg-neon-green px-4 py-2 font-semibold text-black">
             Go Home
           </button>
         </div>
