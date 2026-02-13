@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { parseResponseBodyAsJson } from '@/lib/jsonUtils';
 
 import { parseJsonResponse, isValidString } from '@/lib/jsonUtils';
 
@@ -69,6 +70,7 @@ async function fetchRoomExpiration(roomName: string, apiKey: string): Promise<nu
     return null;
   }
 
+  const roomBody = (await parseResponseBodyAsJson(roomResponse)) as DailyRoomDetailsResponse | null;
   const roomBody = (await parseJsonResponse(roomResponse)) as DailyRoomDetailsResponse | null;
   const roomExpiration = roomBody?.config?.exp;
 
@@ -137,6 +139,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return Response.json({ error: 'Failed to reach Daily meeting token API.' }, { status: 502 });
   }
 
+  const tokenBody = await parseResponseBodyAsJson(tokenResponse);
   const tokenBody = await parseJsonResponse(tokenResponse);
 
   if (!tokenResponse.ok) {

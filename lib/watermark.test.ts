@@ -63,7 +63,7 @@ test('resolveClientIpFromHeaders ignores malformed inputs', () => {
 
 test('buildWatermarkText includes masked identifiers', () => {
   const text = buildWatermarkText('abcd1234-1111-2222-3333-444455556666', 'f'.repeat(64));
-  assert.match(text, /^DO NOT RECORD • SESSION abcd1234 • IPH f{12}$/);
+  assert.match(text, /^DO NOT RECORD • SESSION abcd1234 • IP_HASH f{12}$/);
 });
 
 test('createWatermarkTiles returns stable tile pattern for same seed', () => {

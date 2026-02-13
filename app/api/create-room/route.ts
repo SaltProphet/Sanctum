@@ -6,6 +6,7 @@ import {
 } from '@/lib/creatorGate';
 import { parseJsonResponse, parseJsonRequest } from '@/lib/jsonUtils';
 import { createUniqueRoomName } from '@/lib/roomName';
+import { parseRequestBodyAsJson, parseResponseBodyAsJson } from '@/lib/jsonUtils';
 
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
 const ROOM_EXPIRATION_SECONDS = 1800;
@@ -51,6 +52,7 @@ function buildPreflightErrorResponse(failures: CreatorPreflightFailure[]): Prefl
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const parsedBody = await parseRequestBodyAsJson(request);
   const parsedBody = await parseJsonRequest(request);
   const creatorIdentityId = getCreatorIdentityId(parsedBody);
 
@@ -94,6 +96,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Failed to reach Daily rooms API.' }, { status: 502 });
   }
 
+  const upstreamBody = await parseResponseBodyAsJson(upstreamResponse);
   const upstreamBody = await parseJsonResponse(upstreamResponse);
 
   if (!upstreamResponse.ok) {

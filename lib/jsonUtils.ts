@@ -1,4 +1,8 @@
 /**
+ * Safe JSON parsing utilities for API requests and responses
+ */
+
+export async function parseResponseBodyAsJson(response: Response): Promise<unknown | null> {
  * Safely parses JSON from a Response object.
  * Returns null if parsing fails instead of throwing an error.
  * 
@@ -13,6 +17,7 @@ export async function parseJsonResponse(response: Response): Promise<unknown | n
   }
 }
 
+export async function parseRequestBodyAsJson(request: Request): Promise<unknown | null> {
 /**
  * Safely parses JSON from a Request object.
  * Returns null if parsing fails instead of throwing an error.
