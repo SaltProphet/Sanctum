@@ -72,7 +72,7 @@ export function clearClientEphemeralStorage(): void {
   }
 
   for (const storage of [window.localStorage, window.sessionStorage]) {
-    // Collect all keys first to avoid DOM API calls in loop body
+    // Collect all keys first before filtering to avoid modifying storage during iteration
     const allKeys: string[] = [];
     for (let index = 0; index < storage.length; index += 1) {
       const key = storage.key(index);

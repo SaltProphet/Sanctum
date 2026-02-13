@@ -60,7 +60,7 @@ const ANALYTICS_STORAGE_KEY = 'sanctum.creator.onboarding.analytics';
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(password));
-  // Use reduce for better performance - avoids intermediate array creation
+  // Use for-loop for better performance - avoids intermediate array creation
   const bytes = new Uint8Array(hashBuffer);
   let hex = '';
   for (let i = 0; i < bytes.length; i++) {
