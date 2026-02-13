@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   buildOnboardingSteps,
   getOnboardingStatusView,
@@ -10,6 +10,7 @@ import {
   type OnboardingAction,
 } from "@/lib/creatorOnboarding";
 import { getNightPassRemaining } from "@/lib/countdown";
+import { appRoutes, toAbsoluteAppUrl } from "@/lib/routes";
 
 type CreateRoomResponse = {
   roomName?: string;
@@ -34,23 +35,24 @@ type CreatorAccount = {
   onboardingReferenceId?: string;
 };
 
-type AuthMode = 'login' | 'register';
+type AuthMode = "login" | "register";
 
-const ACCOUNT_STORAGE_KEY = 'sanctum.creator.account';
-const SESSION_STORAGE_KEY = 'sanctum.creator.session';
+const ACCOUNT_STORAGE_KEY = "sanctum.creator.account";
+const SESSION_STORAGE_KEY = "sanctum.creator.session";
+const ANALYTICS_STORAGE_KEY = "sanctum.creator.onboarding.analytics";
+
+function isValidSlug(slug: string): boolean {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
+}
 
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/**
- * Verify a password against its hash.
- * WARNING: This is NOT suitable for production.
- */
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
   const passwordHash = await hashPassword(password);
   return passwordHash === hash;
@@ -105,97 +107,92 @@ type CreateRoomErrorResponse = {
 };
 
 function parseCreateRoomError(data: unknown): string {
-  if (!data || typeof data !== 'object') {
-    return 'Unable to generate link. Please try again.';
+  if (!data || typeof data !== "object") {
+    return "Unable to generate link. Please try again.";
   }
 
   const parsed = data as CreateRoomErrorResponse;
-  const errorMessage = typeof parsed.error?.message === 'string' ? parsed.error.message : null;
+  const errorMessage = typeof parsed.error?.message === "string" ? parsed.error.message : null;
 
-  if (parsed.error?.code !== 'CREATOR_PREFLIGHT_FAILED') {
-    return errorMessage ?? 'Unable to generate link. Please try again.';
+  if (parsed.error?.code !== "CREATOR_PREFLIGHT_FAILED") {
+    return errorMessage ?? "Unable to generate link. Please try again.";
   }
 
   const failures = Array.isArray(parsed.error.failures) ? (parsed.error.failures as PreflightFailure[]) : [];
 
   if (failures.length === 0) {
-    return errorMessage ?? 'Room creation is blocked until creator checks pass.';
+    return errorMessage ?? "Room creation is blocked until creator checks pass.";
   }
 
   const details = failures
     .map((failure) => {
       const gate =
-        failure.gate === 'payment'
-          ? 'Payment'
-          : failure.gate === 'verification'
-            ? 'Verification'
-            : 'Preflight';
+        failure.gate === "payment"
+          ? "Payment"
+          : failure.gate === "verification"
+            ? "Verification"
+            : "Preflight";
 
-      const message = typeof failure.message === 'string' ? failure.message : 'Check failed.';
+      const message = typeof failure.message === "string" ? failure.message : "Check failed.";
       return `${gate}: ${message}`;
     })
-    .join(' ');
+    .join(" ");
 
   return details;
 }
 
 export default function DashboardPage() {
   const [hydrated, setHydrated] = useState(false);
-  const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const [sessionEmail, setSessionEmail] = useState('');
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [sessionEmail, setSessionEmail] = useState("");
   const [account, setAccount] = useState<CreatorAccount | null>(null);
 
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
-  const [registerName, setRegisterName] = useState('');
-  const [registerEmail, setRegisterEmail] = useState('');
-  const [registerPassword, setRegisterPassword] = useState('');
-  const [registerSlug, setRegisterSlug] = useState('');
+  const [registerName, setRegisterName] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerSlug, setRegisterSlug] = useState("");
 
   const [newSlug, setNewSlug] = useState("");
-
   const [roomUrl, setRoomUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState('');
-  const [authFeedback, setAuthFeedback] = useState('');
-  const [onboardingStatus, setOnboardingStatus] = useState<BackendCreatorStatus>('account_created');
-  const [onboardingEventMessage, setOnboardingEventMessage] = useState('');
+  const [copyFeedback, setCopyFeedback] = useState("");
+  const [authFeedback, setAuthFeedback] = useState("");
+  const [onboardingStatus, setOnboardingStatus] = useState<BackendCreatorStatus>("account_created");
+  const [onboardingEventMessage, setOnboardingEventMessage] = useState("");
 
   const isAuthed = Boolean(account && sessionEmail && account.email === sessionEmail);
 
   useEffect(() => {
     setHydrated(true);
 
-    const session = window.localStorage.getItem(SESSION_STORAGE_KEY) ?? '';
+    const session = window.localStorage.getItem(SESSION_STORAGE_KEY) ?? "";
     const storedAccount = readStoredAccount();
 
     setSessionEmail(session);
     setAccount(storedAccount);
 
     if (!storedAccount) {
-      setAuthMode('register');
+      setAuthMode("register");
       return;
     }
 
-    if (storedAccount.customSlug) {
-      setRegisterSlug(storedAccount.customSlug);
-      setNewSlug(storedAccount.customSlug);
-    }
+    setRegisterSlug(storedAccount.customSlug);
+    setNewSlug(storedAccount.customSlug);
 
     if (storedAccount.onboardingStatus) {
       setOnboardingStatus(parseBackendCreatorStatus(storedAccount.onboardingStatus));
       return;
     }
 
-    const envStatus = parseBackendCreatorStatus(
-      process.env.NEXT_PUBLIC_CREATOR_ONBOARDING_STATUS,
-    );
+    const envStatus = parseBackendCreatorStatus(process.env.NEXT_PUBLIC_CREATOR_ONBOARDING_STATUS);
     setOnboardingStatus(envStatus);
   }, []);
 
   useEffect(() => {
-    if (!isAuthed || !account) {
+    if (!isAuthed) {
       return;
     }
 
@@ -207,25 +204,25 @@ export default function DashboardPage() {
       timestamp: new Date().toISOString(),
     };
 
-      const stored = readStoredAccount();
-      if (!stored || stored.email.toLowerCase() !== loginEmail.trim().toLowerCase()) {
-        setAuthLoading(false);
-        setAuthFeedback('No account found for this email.');
-        return;
+    const rawEvents = window.localStorage.getItem(ANALYTICS_STORAGE_KEY);
+    let safeEvents: unknown[] = [];
+    if (rawEvents) {
+      try {
+        const parsed = JSON.parse(rawEvents) as unknown;
+        if (Array.isArray(parsed)) {
+          safeEvents = parsed;
+        }
+      } catch {
+        safeEvents = [];
       }
-
-      const valid = await verifyPassword(loginPassword, stored.passwordHash);
-      if (!valid) {
-        setAuthLoading(false);
-        setAuthFeedback('Incorrect password.');
     }
-    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify([...existingEvents, event]));
+    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify([...safeEvents, event]));
 
     const { dataLayer } = window as Window & { dataLayer?: unknown[] };
     if (Array.isArray(dataLayer)) {
       dataLayer.push(event);
     }
-  }, [account, isAuthed, onboardingStatus]);
+  }, [isAuthed, onboardingStatus]);
 
   const creatorBaseUrl = useMemo(() => {
     if (!isAuthed || !account) {
@@ -233,26 +230,26 @@ export default function DashboardPage() {
     }
 
     if (typeof window === "undefined") {
-      return `/c/${account.customSlug}`;
+      return appRoutes.creator(account.customSlug);
     }
 
     return toAbsoluteAppUrl(appRoutes.creator(account.customSlug), window.location.origin);
   }, [account, isAuthed]);
 
   const handleRegister = useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
+    async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      setAuthFeedback('');
+      setAuthFeedback("");
 
       const slug = toSlug(registerSlug || registerName);
 
       if (!registerName || !registerEmail || !registerPassword) {
-        setAuthFeedback('All register fields are required.');
+        setAuthFeedback("All register fields are required.");
         return;
       }
 
       if (!slug || !isValidSlug(slug)) {
-        setAuthFeedback('Choose a valid custom URL slug (letters, numbers, dashes).');
+        setAuthFeedback("Choose a valid custom URL slug (letters, numbers, dashes).");
         return;
       }
 
@@ -267,7 +264,6 @@ export default function DashboardPage() {
           customSlug: slug,
           slugChangeUsed: false,
           rooms: [],
-          credits: 3,
           onboardingStatus: "account_created",
           onboardingReferenceId: `REF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         };
@@ -278,40 +274,43 @@ export default function DashboardPage() {
         setAccount(nextAccount);
         setSessionEmail(nextAccount.email);
         setNewSlug(nextAccount.customSlug);
-        setAuthFeedback("Registration complete. Welcome to your dashboard.");
         setOnboardingStatus("account_created");
-        setFeedback("Registration complete. Cockpit armed.");
+        setAuthFeedback("Registration complete. Welcome to your dashboard.");
+      } catch (error) {
+        console.error("Error during registration:", error);
+        setAuthFeedback("Something went wrong while registering. Please try again.");
       } finally {
         setIsLoading(false);
-      });
+      }
     },
     [registerEmail, registerName, registerPassword, registerSlug],
   );
 
   const handleLogin = useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
+    async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      setAuthFeedback('');
+      setAuthFeedback("");
 
       const storedAccount = readStoredAccount();
 
       if (!storedAccount) {
-        setAuthFeedback('No creator account found yet. Please register first.');
-        setAuthMode('register');
+        setAuthFeedback("No creator account found yet. Please register first.");
+        setAuthMode("register");
         return;
       }
 
-      if (storedAccount.email !== loginEmail.toLowerCase()) {
-        setAuthFeedback('Invalid email or password.');
+      if (storedAccount.email !== loginEmail.trim().toLowerCase()) {
+        setAuthFeedback("Invalid email or password.");
         return;
       }
 
       setIsLoading(true);
 
-      verifyPassword(loginPassword, storedAccount.passwordHash).then((isValid) => {
+      try {
+        const isValid = await verifyPassword(loginPassword, storedAccount.passwordHash);
+
         if (!isValid) {
-          setAuthFeedback('Invalid email or password.');
-          setIsLoading(false);
+          setAuthFeedback("Invalid email or password.");
           return;
         }
 
@@ -320,19 +319,78 @@ export default function DashboardPage() {
         setAccount(storedAccount);
         setNewSlug(storedAccount.customSlug);
         setOnboardingStatus(parseBackendCreatorStatus(storedAccount.onboardingStatus));
-        setAuthFeedback('Login successful.');
+        setAuthFeedback("Login successful.");
+      } finally {
         setIsLoading(false);
-      });
+      }
     },
     [loginEmail, loginPassword],
   );
 
   const handleLogout = useCallback(() => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
-    setSessionEmail('');
-    setRoomFeedback('');
-    setLatestUrl('');
+    setSessionEmail("");
+    setRoomUrl("");
+    setCopyFeedback("");
+    setOnboardingEventMessage("");
   }, []);
+
+  const handleRecoverableAction = useCallback(
+    (action: OnboardingAction) => {
+      if (!account) {
+        return;
+      }
+
+      let nextStatus: BackendCreatorStatus = onboardingStatus;
+      if (action.id === "retry_payment") {
+        nextStatus = "payment_pending";
+      } else if (action.id === "restart_verification") {
+        nextStatus = "verification_required";
+      } else if (action.id === "contact_support") {
+        nextStatus = "manual_review_required";
+      }
+
+      const updatedAccount: CreatorAccount = {
+        ...account,
+        onboardingStatus: nextStatus,
+      };
+
+      writeStoredAccount(updatedAccount);
+      setAccount(updatedAccount);
+      setOnboardingStatus(nextStatus);
+      setOnboardingEventMessage(`Action submitted: ${action.label}.`);
+    },
+    [account, onboardingStatus],
+  );
+
+  const handleSlugUpdate = useCallback(() => {
+    if (!account) {
+      return;
+    }
+
+    const slug = toSlug(newSlug);
+
+    if (!slug || !isValidSlug(slug)) {
+      setCopyFeedback("Enter a valid slug before saving.");
+      return;
+    }
+
+    if (account.slugChangeUsed && slug !== account.customSlug) {
+      setCopyFeedback("Your one-time slug change has already been used.");
+      return;
+    }
+
+    const updatedAccount: CreatorAccount = {
+      ...account,
+      customSlug: slug,
+      slugChangeUsed: slug !== account.customSlug ? true : account.slugChangeUsed,
+    };
+
+    writeStoredAccount(updatedAccount);
+    setAccount(updatedAccount);
+    setNewSlug(slug);
+    setCopyFeedback("Creator URL updated.");
+  }, [account, newSlug]);
 
   const handleGenerateLink = useCallback(async () => {
     if (!account) {
@@ -340,14 +398,12 @@ export default function DashboardPage() {
     }
 
     if (onboardingStatus !== "active") {
-      setCopyFeedback(
-        "Dashboard features remain locked until your backend status is active.",
-      );
+      setCopyFeedback("Dashboard features remain locked until your backend status is active.");
       return;
     }
 
     setIsLoading(true);
-    setCopyFeedback('');
+    setCopyFeedback("");
 
     try {
       const response = await fetch("/api/create-room", {
@@ -355,7 +411,7 @@ export default function DashboardPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ creatorIdentityId: 'dashboard-creator' }),
+        body: JSON.stringify({ creatorIdentityId: "dashboard-creator" }),
       });
 
       const responseData = (await response.json()) as unknown;
@@ -366,15 +422,15 @@ export default function DashboardPage() {
 
       const data = responseData as CreateRoomResponse;
       const roomName = data.roomName ?? data.name;
-      const canonicalPath = data.url ?? (roomName ? appRoutes.room(roomName) : '');
+      const canonicalPath = data.url ?? (roomName ? appRoutes.room(roomName) : "");
 
-      if (!canonicalPath.includes('/room/')) {
-        throw new Error('Response missing canonical room URL.');
+      if (!canonicalPath.includes("/room/")) {
+        throw new Error("Response missing canonical room URL.");
       }
 
       const generatedUrl = toAbsoluteAppUrl(canonicalPath, window.location.origin);
       const nextRoom: BurnerRoom = {
-        id: roomName ?? canonicalPath.split('/room/').pop() ?? '',
+        id: roomName ?? canonicalPath.split("/room/").pop() ?? "",
         createdAt: new Date().toISOString(),
         url: generatedUrl,
       };
@@ -387,9 +443,10 @@ export default function DashboardPage() {
       writeStoredAccount(updatedAccount);
       setAccount(updatedAccount);
       setRoomUrl(generatedUrl);
+      setCopyFeedback("Safe link generated.");
     } catch (error) {
-      setRoomUrl('');
-      setCopyFeedback(error instanceof Error ? error.message : 'Unable to generate link. Please try again.');
+      setRoomUrl("");
+      setCopyFeedback(error instanceof Error ? error.message : "Unable to generate link. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -400,25 +457,16 @@ export default function DashboardPage() {
       return;
     }
 
-  const handleToggle = useCallback(
-    (field: 'predatorWatermark' | 'geoBlockBannedStates') => {
-      if (!account) return;
-      const next = { ...account, [field]: !account[field] };
-      setAccount(next);
-      writeStoredAccount(next);
-    },
-    [account],
-  );
-
-  const handleCopy = useCallback(async (value: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      setRoomFeedback('Link copied.');
-      if (navigator.vibrate) navigator.vibrate(20);
+      setCopyFeedback("Link copied.");
+      if (navigator.vibrate) {
+        navigator.vibrate(20);
+      }
     } catch {
-      setRoomFeedback('Copy failed.');
+      setCopyFeedback("Copy failed.");
     }
-  }, [onboardingStatus]);
+  }, []);
 
   if (!hydrated) {
     return null;
@@ -426,7 +474,8 @@ export default function DashboardPage() {
 
   const onboardingView = getOnboardingStatusView(onboardingStatus);
   const onboardingSteps = buildOnboardingSteps(onboardingStatus);
-  const isDashboardLocked = onboardingStatus !== 'active';
+  const isDashboardLocked = onboardingStatus !== "active";
+  const clock = Date.now();
 
   if (!isAuthed) {
     return (
@@ -437,27 +486,25 @@ export default function DashboardPage() {
           <div className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-950 p-1">
             <button
               type="button"
-              onClick={() => setAuthMode('login')}
+              onClick={() => setAuthMode("login")}
               className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
-                authMode === 'login' ? 'bg-neon-green text-black' : 'text-slate-300 hover:bg-slate-800'
+                authMode === "login" ? "bg-neon-green text-black" : "text-slate-300 hover:bg-slate-800"
               }`}
             >
               Log in
             </button>
             <button
               type="button"
-              onClick={() => setAuthMode('register')}
+              onClick={() => setAuthMode("register")}
               className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
-                authMode === 'register'
-                  ? 'bg-neon-green text-black'
-                  : 'text-slate-300 hover:bg-slate-800'
+                authMode === "register" ? "bg-neon-green text-black" : "text-slate-300 hover:bg-slate-800"
               }`}
             >
               Register
             </button>
           </div>
 
-          {authMode === 'login' ? (
+          {authMode === "login" ? (
             <form onSubmit={handleLogin} className="space-y-3">
               <input
                 value={loginEmail}
@@ -475,7 +522,8 @@ export default function DashboardPage() {
               />
               <button
                 type="submit"
-                className="w-full rounded-md bg-neon-green px-4 py-2 font-semibold text-black"
+                disabled={isLoading}
+                className="w-full rounded-md bg-neon-green px-4 py-2 font-semibold text-black disabled:opacity-60"
               >
                 Log in to dashboard
               </button>
@@ -512,7 +560,8 @@ export default function DashboardPage() {
               />
               <button
                 type="submit"
-                className="w-full rounded-md bg-neon-green px-4 py-2 font-semibold text-black"
+                disabled={isLoading}
+                className="w-full rounded-md bg-neon-green px-4 py-2 font-semibold text-black disabled:opacity-60"
               >
                 Register and open dashboard
               </button>
@@ -543,13 +592,9 @@ export default function DashboardPage() {
         </header>
 
         <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
-          <h2 className="text-lg font-semibold text-slate-50">
-            Creator onboarding progress
-          </h2>
+          <h2 className="text-lg font-semibold text-slate-50">Creator onboarding progress</h2>
           <p className="mt-2 text-sm text-slate-300">{onboardingView.title}</p>
-          <p className="mt-1 text-sm text-slate-400">
-            {onboardingView.description}
-          </p>
+          <p className="mt-1 text-sm text-slate-400">{onboardingView.description}</p>
           <ol className="mt-4 space-y-2">
             {onboardingSteps.map((step, index) => (
               <li
@@ -557,17 +602,17 @@ export default function DashboardPage() {
                 className="flex items-center gap-3 rounded-md border border-slate-700 bg-black px-3 py-2 text-sm"
               >
                 <span
-                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${step.state === "complete" ? "bg-neon-green text-black" : step.state === "current" ? "bg-slate-200 text-black" : "bg-slate-700 text-slate-200"}`}
+                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
+                    step.state === "complete"
+                      ? "bg-neon-green text-black"
+                      : step.state === "current"
+                        ? "bg-slate-200 text-black"
+                        : "bg-slate-700 text-slate-200"
+                  }`}
                 >
                   {index + 1}
                 </span>
-                <span
-                  className={
-                    step.state === "upcoming"
-                      ? "text-slate-400"
-                      : "text-slate-100"
-                  }
-                >
+                <span className={step.state === "upcoming" ? "text-slate-400" : "text-slate-100"}>
                   {step.label}
                 </span>
               </li>
@@ -589,26 +634,15 @@ export default function DashboardPage() {
           ) : null}
           {isDashboardLocked ? (
             <p className="mt-3 text-xs text-amber-300">
-              Dashboard features are hard-blocked until backend status returns{" "}
-              <code>active</code>.
+              Dashboard features are hard-blocked until backend status returns <code>active</code>.
             </p>
           ) : null}
-          {onboardingEventMessage ? (
-            <p className="mt-2 text-xs text-slate-300">
-              {onboardingEventMessage}
-            </p>
-          ) : null}
+          {onboardingEventMessage ? <p className="mt-2 text-xs text-slate-300">{onboardingEventMessage}</p> : null}
         </div>
 
-        <div
-          className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? "opacity-60" : ""}`}
-        >
-          <h2 className="text-lg font-semibold text-slate-50">
-            Your creator URL
-          </h2>
-          <p className="mt-2 break-all font-mono text-sm text-neon-green">
-            {creatorBaseUrl}
-          </p>
+        <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? "opacity-60" : ""}`}>
+          <h2 className="text-lg font-semibold text-slate-50">Your creator URL</h2>
+          <p className="mt-2 break-all font-mono text-sm text-neon-green">{creatorBaseUrl}</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
               value={newSlug}
@@ -627,16 +661,12 @@ export default function DashboardPage() {
             </button>
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            One included custom URL change: {account?.slugChangeUsed ? 'Used' : 'Available'}.
+            One included custom URL change: {account?.slugChangeUsed ? "Used" : "Available"}.
           </p>
         </div>
 
-        <div
-          className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? "opacity-60" : ""}`}
-        >
-          <h2 className="text-lg font-semibold text-slate-50">
-            Burner room generator
-          </h2>
+        <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? "opacity-60" : ""}`}>
+          <h2 className="text-lg font-semibold text-slate-50">Burner room generator</h2>
           <button
             onClick={handleGenerateLink}
             disabled={isLoading || isDashboardLocked}
@@ -646,9 +676,7 @@ export default function DashboardPage() {
           </button>
           {roomUrl ? (
             <div className="mt-3 space-y-2">
-              <p className="break-all rounded-md border border-slate-700 bg-black px-3 py-2 font-mono text-sm">
-                {roomUrl}
-              </p>
+              <p className="break-all rounded-md border border-slate-700 bg-black px-3 py-2 font-mono text-sm">{roomUrl}</p>
               <button
                 type="button"
                 onClick={() => void handleCopy(roomUrl)}
@@ -661,23 +689,14 @@ export default function DashboardPage() {
           {copyFeedback ? <p className="mt-2 text-sm text-slate-300">{copyFeedback}</p> : null}
         </div>
 
-        <div
-          className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? "opacity-60" : ""}`}
-        >
+        <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? "opacity-60" : ""}`}>
           <h2 className="text-lg font-semibold text-slate-50">Active rooms</h2>
           {account && account.rooms.length > 0 ? (
             <ul className="mt-3 space-y-2">
               {account.rooms.map((room) => (
-                <li
-                  key={room.id}
-                  className="rounded-md border border-slate-700 bg-black p-3 text-sm"
-                >
-                  <p className="break-all font-mono text-neon-green">
-                    {room.url}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Expires in {getNightPassRemaining(room.createdAt, clock)}
-                  </p>
+                <li key={room.id} className="rounded-md border border-slate-700 bg-black p-3 text-sm">
+                  <p className="break-all font-mono text-neon-green">{room.url}</p>
+                  <p className="mt-1 text-xs text-slate-400">Expires in {getNightPassRemaining(room.createdAt, clock)}</p>
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"
@@ -687,9 +706,7 @@ export default function DashboardPage() {
                       Copy
                     </button>
                     {isDashboardLocked ? (
-                      <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-500">
-                        Open room
-                      </span>
+                      <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-500">Open room</span>
                     ) : (
                       <Link
                         href={appRoutes.room(room.id)}
@@ -703,9 +720,7 @@ export default function DashboardPage() {
               ))}
             </ul>
           ) : (
-            <p className="mt-2 text-sm text-slate-400">
-              No burner rooms yet. Generate your first room URL above.
-            </p>
+            <p className="mt-2 text-sm text-slate-400">No burner rooms yet. Generate your first room URL above.</p>
           )}
         </div>
       </section>
