@@ -4,7 +4,7 @@ import {
   evaluateCreatorPreflight,
   type CreatorPreflightFailure,
 } from '@/lib/creatorGate';
-import { parseJsonResponse, parseJsonRequest } from '@/lib/jsonUtils';
+import { parseJsonRequest, parseJsonResponse } from '@/lib/jsonUtils';
 import { createUniqueRoomName } from '@/lib/roomName';
 
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
