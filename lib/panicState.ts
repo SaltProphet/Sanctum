@@ -72,8 +72,8 @@ export function clearClientEphemeralStorage(): void {
   }
 
   for (const storage of [window.localStorage, window.sessionStorage]) {
-    const keysToRemove: string[] = [];
-
+    // Collect all keys first before filtering to avoid modifying storage during iteration
+    const allKeys: string[] = [];
     for (let index = 0; index < storage.length; index += 1) {
       const storageKey = storage.key(index);
       if (!storageKey) {
@@ -86,5 +86,17 @@ export function clearClientEphemeralStorage(): void {
     }
 
     keysToRemove.forEach((storageKey) => storage.removeItem(storageKey));
+      const key = storage.key(index);
+      if (key) {
+        allKeys.push(key);
+      }
+    }
+
+    // Filter and remove in a single pass
+    const keysToRemove = allKeys.filter((key) =>
+      CLIENT_EPHEMERAL_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
+    );
+
+    keysToRemove.forEach((key) => storage.removeItem(key));
   }
 }

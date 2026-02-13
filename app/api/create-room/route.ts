@@ -4,6 +4,7 @@ import {
   evaluateCreatorPreflight,
   type CreatorPreflightFailure,
 } from '@/lib/creatorGate';
+import { parseJsonResponse, parseJsonRequest } from '@/lib/jsonUtils';
 import { createUniqueRoomName } from '@/lib/roomName';
 import { parseRequestBodyAsJson, parseResponseBodyAsJson } from '@/lib/jsonUtils';
 
@@ -52,6 +53,7 @@ function buildPreflightErrorResponse(failures: CreatorPreflightFailure[]): Prefl
 
 export async function POST(request: Request): Promise<Response> {
   const parsedBody = await parseRequestBodyAsJson(request);
+  const parsedBody = await parseJsonRequest(request);
   const creatorIdentityId = getCreatorIdentityId(parsedBody);
 
   const preflightResult = await evaluateCreatorPreflight({
@@ -95,6 +97,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const upstreamBody = await parseResponseBodyAsJson(upstreamResponse);
+  const upstreamBody = await parseJsonResponse(upstreamResponse);
 
   if (!upstreamResponse.ok) {
     const upstreamErrorMessage =
