@@ -2,6 +2,13 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  buildOnboardingSteps,
+  getOnboardingStatusView,
+  parseBackendCreatorStatus,
+  type BackendCreatorStatus,
+  type OnboardingAction,
+} from '@/lib/creatorOnboarding';
 
 type CreateRoomResponse = {
   roomName?: string;
@@ -22,12 +29,15 @@ type CreatorAccount = {
   customSlug: string;
   slugChangeUsed: boolean;
   rooms: BurnerRoom[];
+  onboardingStatus?: BackendCreatorStatus;
+  onboardingReferenceId?: string;
 };
 
 type AuthMode = 'login' | 'register';
 
 const ACCOUNT_STORAGE_KEY = 'sanctum.creator.account';
 const SESSION_STORAGE_KEY = 'sanctum.creator.session';
+const ANALYTICS_STORAGE_KEY = 'sanctum.creator.onboarding.analytics';
 
 /**
  * Simple hash function for password verification in demo/prototype environment.
@@ -158,6 +168,10 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState('');
   const [authFeedback, setAuthFeedback] = useState('');
+  const [onboardingStatus, setOnboardingStatus] = useState<BackendCreatorStatus>('account_created');
+  const [onboardingEventMessage, setOnboardingEventMessage] = useState('');
+
+  const isAuthed = Boolean(account && sessionEmail && account.email === sessionEmail);
 
   useEffect(() => {
     setHydrated(true);
@@ -177,9 +191,45 @@ export default function DashboardPage() {
       setRegisterSlug(storedAccount.customSlug);
       setNewSlug(storedAccount.customSlug);
     }
+
+    if (storedAccount.onboardingStatus) {
+      setOnboardingStatus(parseBackendCreatorStatus(storedAccount.onboardingStatus));
+      return;
+    }
+
+    const envStatus = parseBackendCreatorStatus(process.env.NEXT_PUBLIC_CREATOR_ONBOARDING_STATUS);
+    setOnboardingStatus(envStatus);
   }, []);
 
-  const isAuthed = Boolean(account && sessionEmail && account.email === sessionEmail);
+  useEffect(() => {
+    if (!isAuthed || !account) {
+      return;
+    }
+
+    const currentStep = getOnboardingStatusView(onboardingStatus).currentStep;
+    const event = {
+      event: 'creator_onboarding_step_seen',
+      step: currentStep,
+      status: onboardingStatus,
+      timestamp: new Date().toISOString(),
+    };
+
+    const existingRaw = window.localStorage.getItem(ANALYTICS_STORAGE_KEY);
+    let existingEvents: unknown[] = [];
+    if (existingRaw) {
+      try {
+        existingEvents = JSON.parse(existingRaw) as unknown[];
+      } catch {
+        existingEvents = [];
+      }
+    }
+    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify([...existingEvents, event]));
+
+    const { dataLayer } = window as Window & { dataLayer?: unknown[] };
+    if (Array.isArray(dataLayer)) {
+      dataLayer.push(event);
+    }
+  }, [account, isAuthed, onboardingStatus]);
 
   const creatorBaseUrl = useMemo(() => {
     if (!isAuthed || !account) {
@@ -220,6 +270,8 @@ export default function DashboardPage() {
           customSlug: slug,
           slugChangeUsed: false,
           rooms: [],
+          onboardingStatus: 'account_created',
+          onboardingReferenceId: `REF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         };
 
         writeStoredAccount(nextAccount);
@@ -229,6 +281,7 @@ export default function DashboardPage() {
         setSessionEmail(nextAccount.email);
         setNewSlug(nextAccount.customSlug);
         setAuthFeedback('Registration complete. Welcome to your dashboard.');
+        setOnboardingStatus('account_created');
         setIsLoading(false);
       });
     },
@@ -266,6 +319,7 @@ export default function DashboardPage() {
         setSessionEmail(storedAccount.email);
         setAccount(storedAccount);
         setNewSlug(storedAccount.customSlug);
+        setOnboardingStatus(parseBackendCreatorStatus(storedAccount.onboardingStatus));
         setAuthFeedback('Login successful.');
         setIsLoading(false);
       });
@@ -280,10 +334,38 @@ export default function DashboardPage() {
     setRoomUrl('');
     setCopyFeedback('');
     setAuthFeedback('Logged out.');
+    setOnboardingStatus('account_created');
   }, []);
+
+  const handleRecoverableAction = useCallback(
+    (action: OnboardingAction) => {
+      if (!account) {
+        return;
+      }
+
+      if (action.id === 'retry_payment') {
+        setOnboardingEventMessage('Payment retry initiated. Confirming updated status from backend...');
+      }
+
+      if (action.id === 'restart_verification') {
+        setOnboardingEventMessage('Verification session restarted. Complete ID + selfie to continue.');
+      }
+
+      if (action.id === 'contact_support') {
+        const refId = account.onboardingReferenceId ?? 'REF-UNKNOWN';
+        window.location.href = `mailto:support@sanctum.local?subject=Manual%20review%20request%20${refId}&body=Please%20review%20creator%20onboarding.%20Reference%20ID:%20${refId}`;
+      }
+    },
+    [account],
+  );
 
   const handleSlugUpdate = useCallback(() => {
     if (!account) {
+      return;
+    }
+
+    if (onboardingStatus !== 'active') {
+      setAuthFeedback('Custom URL changes are locked until onboarding status is active.');
       return;
     }
 
@@ -314,10 +396,15 @@ export default function DashboardPage() {
     setAccount(updatedAccount);
     setNewSlug(updatedAccount.customSlug);
     setAuthFeedback('Custom URL updated. Your one-time included change is now used.');
-  }, [account, newSlug]);
+  }, [account, newSlug, onboardingStatus]);
 
   const handleGenerateLink = useCallback(async () => {
     if (!account) {
+      return;
+    }
+
+    if (onboardingStatus !== 'active') {
+      setCopyFeedback('Dashboard features remain locked until your backend status is active.');
       return;
     }
 
@@ -368,10 +455,15 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [account]);
+  }, [account, onboardingStatus]);
 
   const handleCopy = useCallback(async (value: string) => {
     if (!value) {
+      return;
+    }
+
+    if (onboardingStatus !== 'active') {
+      setCopyFeedback('Copy actions are locked until onboarding status is active.');
       return;
     }
 
@@ -381,11 +473,15 @@ export default function DashboardPage() {
     } catch {
       setCopyFeedback('Copy failed. Please copy manually.');
     }
-  }, []);
+  }, [onboardingStatus]);
 
   if (!hydrated) {
     return null;
   }
+
+  const onboardingView = getOnboardingStatusView(onboardingStatus);
+  const onboardingSteps = buildOnboardingSteps(onboardingStatus);
+  const isDashboardLocked = onboardingStatus !== 'active';
 
   if (!isAuthed) {
     return (
@@ -502,18 +598,67 @@ export default function DashboardPage() {
         </header>
 
         <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
+          <h2 className="text-lg font-semibold text-slate-50">Creator onboarding progress</h2>
+          <p className="mt-2 text-sm text-slate-300">{onboardingView.title}</p>
+          <p className="mt-1 text-sm text-slate-400">{onboardingView.description}</p>
+          <ol className="mt-4 space-y-2">
+            {onboardingSteps.map((step, index) => (
+              <li key={step.id} className="flex items-center gap-3 rounded-md border border-slate-700 bg-black px-3 py-2 text-sm">
+                <span
+                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
+                    step.state === 'complete'
+                      ? 'bg-neon-green text-black'
+                      : step.state === 'current'
+                        ? 'bg-slate-200 text-black'
+                        : 'bg-slate-700 text-slate-200'
+                  }`}
+                >
+                  {index + 1}
+                </span>
+                <span className={step.state === 'upcoming' ? 'text-slate-400' : 'text-slate-100'}>{step.label}</span>
+              </li>
+            ))}
+          </ol>
+
+          {onboardingView.actions.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {onboardingView.actions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  onClick={() => handleRecoverableAction(action)}
+                  className="rounded-md border border-slate-600 px-3 py-2 text-sm hover:bg-slate-800"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {isDashboardLocked ? (
+            <p className="mt-3 text-xs text-amber-300">
+              Dashboard features are hard-blocked until backend status returns <code>active</code>.
+              {account?.onboardingReferenceId ? ` Reference ID: ${account.onboardingReferenceId}` : ''}
+            </p>
+          ) : null}
+          {onboardingEventMessage ? <p className="mt-2 text-xs text-slate-300">{onboardingEventMessage}</p> : null}
+        </div>
+
+        <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? 'opacity-60' : ''}`}>
           <h2 className="text-lg font-semibold text-slate-50">Your creator URL</h2>
           <p className="mt-2 break-all font-mono text-sm text-neon-green">{creatorBaseUrl}</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
               value={newSlug}
               onChange={(event) => setNewSlug(event.target.value)}
+              disabled={isDashboardLocked}
               className="w-full rounded-md border border-slate-600 bg-black px-3 py-2 text-sm"
               placeholder="Update slug one time"
             />
             <button
               type="button"
               onClick={handleSlugUpdate}
+              disabled={isDashboardLocked}
               className="rounded-md bg-slate-200 px-4 py-2 text-sm font-semibold text-black"
             >
               Save one-time change
@@ -524,11 +669,11 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
+        <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? 'opacity-60' : ''}`}>
           <h2 className="text-lg font-semibold text-slate-50">Burner room generator</h2>
           <button
             onClick={handleGenerateLink}
-            disabled={isLoading}
+            disabled={isLoading || isDashboardLocked}
             className="mt-3 w-full rounded-md bg-neon-green px-4 py-3 font-semibold text-black disabled:cursor-not-allowed disabled:bg-slate-500"
           >
             {isLoading ? 'Generating...' : 'Create burner room URL'}
@@ -550,7 +695,7 @@ export default function DashboardPage() {
           {copyFeedback ? <p className="mt-2 text-sm text-slate-300">{copyFeedback}</p> : null}
         </div>
 
-        <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
+        <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? 'opacity-60' : ''}`}>
           <h2 className="text-lg font-semibold text-slate-50">Your room URLs</h2>
           {account && account.rooms.length > 0 ? (
             <ul className="mt-3 space-y-2">
@@ -568,12 +713,18 @@ export default function DashboardPage() {
                     >
                       Copy
                     </button>
-                    <Link
-                      href={`/room/${room.id}`}
-                      className="rounded border border-neon-green px-2 py-1 text-xs text-neon-green"
-                    >
-                      Open room
-                    </Link>
+                    {isDashboardLocked ? (
+                      <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-500">
+                        Open room
+                      </span>
+                    ) : (
+                      <Link
+                        href={`/room/${room.id}`}
+                        className="rounded border border-neon-green px-2 py-1 text-xs text-neon-green"
+                      >
+                        Open room
+                      </Link>
+                    )}
                   </div>
                 </li>
               ))}
