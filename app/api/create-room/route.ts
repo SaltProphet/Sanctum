@@ -125,7 +125,8 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Daily rooms API response is missing room fields.' }, { status: 502 });
   }
 
-  const roomPath = appRoutes.room(name);
+  // Return basePath-less path; clients will apply basePath when needed
+  const roomPath = `/room/${name}`;
 
   return Response.json({ roomName: name, url: roomPath, name });
 }

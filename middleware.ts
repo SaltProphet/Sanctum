@@ -52,7 +52,8 @@ export function middleware(req: NextRequest) {
 
   if (country === 'US' && region && BLOCKED_US_STATE_SET.has(region)) {
     const blockedUrl = req.nextUrl.clone();
-    blockedUrl.pathname = appRoutes.blocked();
+    // NextURL.pathname should be basePath-less; Next.js will add basePath when formatting
+    blockedUrl.pathname = '/blocked';
     blockedUrl.search = '';
 
     return attachViewerSessionCookie(req, NextResponse.redirect(blockedUrl));

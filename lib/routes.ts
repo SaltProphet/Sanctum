@@ -14,12 +14,18 @@ function normalizeBasePath(rawBasePath: string | undefined): string {
   return prefixed.endsWith('/') ? prefixed.slice(0, -1) : prefixed;
 }
 
-const APP_BASE_PATH = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH);
+const RAW_APP_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? process.env.BASE_PATH;
+const APP_BASE_PATH = normalizeBasePath(RAW_APP_BASE_PATH);
 
 export function withBasePath(pathname: string): string {
   const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
 
   if (!APP_BASE_PATH) {
+    return normalizedPath;
+  }
+
+  // If the path already starts with the basePath, return it as-is (idempotent)
+  if (normalizedPath.startsWith(APP_BASE_PATH + '/') || normalizedPath === APP_BASE_PATH) {
     return normalizedPath;
   }
 
@@ -35,6 +41,7 @@ export function toAbsoluteAppUrl(pathname: string, origin: string): string {
     return pathname;
   }
 
+  // withBasePath is now idempotent, so it's safe to call even if pathname already has basePath
   return new URL(withBasePath(pathname), origin).toString();
 }
 

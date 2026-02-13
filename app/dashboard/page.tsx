@@ -342,7 +342,8 @@ export default function DashboardPage() {
     setCopyFeedback('');
 
     try {
-      const response = await fetch('/api/create-room', {
+      // Use relative URL so basePath is automatically applied by the browser
+      const response = await fetch('api/create-room', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
