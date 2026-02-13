@@ -20,6 +20,17 @@ type CreatorAccount = {
   rooms: BurnerRoom[];
 };
 
+type DepositStatus =
+  | 'deposit_missing'
+  | 'deposit_pending'
+  | 'deposit_paid'
+  | 'deposit_failed'
+  | 'deposit_refunded';
+
+type DepositStatusResponse = {
+  status?: DepositStatus;
+};
+
 type AuthMode = 'login' | 'register';
 
 const ACCOUNT_STORAGE_KEY = 'sanctum.creator.account';
@@ -88,6 +99,16 @@ export default function DashboardPage() {
   const [registerPassword, setRegisterPassword] = useState('');
   const [registerSlug, setRegisterSlug] = useState('');
 
+  const [newSlug, setNewSlug] = useState('');
+
+  const [roomUrl, setRoomUrl] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState('');
+  const [authFeedback, setAuthFeedback] = useState('');
+  const [depositStatus, setDepositStatus] = useState<DepositStatus>('deposit_missing');
+  const [depositFeedback, setDepositFeedback] = useState('');
+  const [isInitiatingDeposit, setIsInitiatingDeposit] = useState(false);
+
   useEffect(() => {
     const session = window.localStorage.getItem(SESSION_STORAGE_KEY) ?? '';
     const stored = readStoredAccount();
@@ -103,6 +124,98 @@ export default function DashboardPage() {
   }, []);
 
   const isAuthed = Boolean(account && sessionEmail && account.email === sessionEmail);
+
+  const refreshDepositStatus = useCallback(async () => {
+    if (!account) {
+      setDepositStatus('deposit_missing');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/payments/deposit/status?creator_id=${encodeURIComponent(account.customSlug)}`);
+      const data = (await response.json()) as DepositStatusResponse;
+      setDepositStatus(response.ok && data.status ? data.status : 'deposit_missing');
+    } catch {
+      setDepositStatus('deposit_missing');
+    }
+  }, [account]);
+
+  useEffect(() => {
+    if (!isAuthed) {
+      return;
+    }
+
+    void refreshDepositStatus();
+  }, [isAuthed, refreshDepositStatus]);
+
+  const handleInitiateDeposit = useCallback(async () => {
+    if (!account) {
+      return;
+    }
+
+    setIsInitiatingDeposit(true);
+    setDepositFeedback('');
+
+    try {
+      const response = await fetch('/api/payments/deposit/initiate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `deposit-${account.customSlug}-${Date.now()}`,
+        },
+        body: JSON.stringify({
+          creator_id: account.customSlug,
+          provider: 'stripe',
+          amount: 500,
+          currency: 'USD',
+        }),
+      });
+
+      if (!response.ok) {
+        setDepositFeedback('Unable to initiate deposit. Please retry.');
+        return;
+      }
+
+      setDepositFeedback('Deposit initiated. Room creation unlocks only after confirmed settled/succeeded webhook.');
+      await refreshDepositStatus();
+    } catch {
+      setDepositFeedback('Unable to initiate deposit. Please retry.');
+    } finally {
+      setIsInitiatingDeposit(false);
+    }
+  }, [account, refreshDepositStatus]);
+
+  const depositNextStep = useMemo(() => {
+    if (depositStatus === 'deposit_paid') {
+      return 'Deposit settled. You can generate room links.';
+    }
+
+    if (depositStatus === 'deposit_failed') {
+      return 'Deposit failed. Retry by initiating a new deposit.';
+    }
+
+    if (depositStatus === 'deposit_refunded') {
+      return 'Deposit refunded. Start a new deposit to continue.';
+    }
+
+    if (depositStatus === 'deposit_pending') {
+      return 'Deposit pending. Await provider webhook confirmation.';
+    }
+
+    return 'No deposit yet. Initiate a deposit to continue.';
+  }, [depositStatus]);
+
+  const creatorBaseUrl = useMemo(() => {
+    if (!isAuthed || !account) {
+      return '';
+    }
+
+    if (typeof window === 'undefined') {
+      return `/c/${account.customSlug}`;
+    }
+
+    return `${window.location.origin}/c/${account.customSlug}`;
+  }, [account, isAuthed]);
 
   const handleRegister = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -166,6 +279,10 @@ export default function DashboardPage() {
     try {
       const response = await fetch('/api/create-room', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ creatorIdentityId: account.customSlug }),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ creatorIdentityId: account.email }),
       });
@@ -254,6 +371,57 @@ export default function DashboardPage() {
           </div>
         </header>
 
+        <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
+          <h2 className="text-lg font-semibold text-slate-50">Deposit status</h2>
+          <p className="mt-2 text-sm text-slate-300">
+            Current status: <span className="font-semibold text-neon-green">{depositStatus}</span>
+          </p>
+          <p className="mt-2 text-sm text-slate-400">{depositNextStep}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void refreshDepositStatus()}
+              className="rounded-md border border-slate-600 px-3 py-2 text-sm"
+            >
+              Refresh status
+            </button>
+            {(depositStatus === 'deposit_missing' ||
+              depositStatus === 'deposit_failed' ||
+              depositStatus === 'deposit_refunded') && (
+              <button
+                type="button"
+                disabled={isInitiatingDeposit}
+                onClick={() => void handleInitiateDeposit()}
+                className="rounded-md bg-neon-green px-3 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:bg-slate-500"
+              >
+                {isInitiatingDeposit ? 'Starting...' : 'Initiate deposit'}
+              </button>
+            )}
+          </div>
+          {depositFeedback ? <p className="mt-2 text-sm text-slate-300">{depositFeedback}</p> : null}
+        </div>
+
+        <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
+          <h2 className="text-lg font-semibold text-slate-50">Burner room generator</h2>
+          <button
+            onClick={handleGenerateLink}
+            disabled={isLoading}
+            className="mt-3 w-full rounded-md bg-neon-green px-4 py-3 font-semibold text-black disabled:cursor-not-allowed disabled:bg-slate-500"
+          >
+            {isLoading ? 'Generating...' : 'Create burner room URL'}
+          </button>
+          {roomUrl ? (
+            <div className="mt-3 space-y-2">
+              <p className="break-all rounded-md border border-slate-700 bg-black px-3 py-2 font-mono text-sm">
+                {roomUrl}
+              </p>
+              <button
+                type="button"
+                onClick={() => handleCopy(roomUrl)}
+                className="rounded-md border border-slate-600 px-3 py-2 text-sm"
+              >
+                Copy latest URL
+              </button>
         <button
           onClick={handleGenerate}
           disabled={loading}
