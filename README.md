@@ -104,6 +104,11 @@ sanctum/
 - Refactor `app/dashboard/page.tsx` to replace inline style objects with Tailwind utility classes.
 - After the refactor, update this README to remove inline-style caveats and document a true Tailwind-only approach.
 
+## AI Agent Workflow
+
+- Repository Copilot rules: `.github/copilot-instructions.md`
+- Role/mode switching guidance: `docs/GITHUB_AI_WORKFLOW.md`
+
 ## License
 
 MIT
