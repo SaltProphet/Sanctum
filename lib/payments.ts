@@ -42,7 +42,7 @@ function normalizeCurrency(currency: string): string {
   return currency.trim().toUpperCase();
 }
 
-function buildIdempotencyScope(provider: string, key: string): string {
+function createScopedIdempotencyKey(provider: string, key: string): string {
   return `${provider.trim().toLowerCase()}:${key.trim()}`;
 }
 
@@ -63,7 +63,7 @@ export function verifyWebhookSignature(payload: string, signature: string | null
 
 export function initiateDeposit({ idempotencyKey, creatorId, provider, amount, currency }: InitiateDepositInput): DepositRecord {
   const normalizedProvider = provider.trim().toLowerCase();
-  const scopedIdempotencyKey = buildIdempotencyScope(normalizedProvider, idempotencyKey);
+  const scopedIdempotencyKey = createScopedIdempotencyKey(normalizedProvider, idempotencyKey);
   const existing = depositsByIdempotencyKey.get(scopedIdempotencyKey);
 
   if (existing) {

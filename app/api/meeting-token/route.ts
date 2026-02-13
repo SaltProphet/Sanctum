@@ -48,7 +48,7 @@ function getRole(input: unknown): JoinRole {
   return input === 'creator' ? 'creator' : 'viewer';
 }
 
-async function parseJson(response: Response): Promise<unknown | null> {
+async function parseResponseBodyAsJson(response: Response): Promise<unknown | null> {
   try {
     return await response.json();
   } catch {
@@ -75,7 +75,7 @@ async function fetchRoomExpiration(roomName: string, apiKey: string): Promise<nu
     return null;
   }
 
-  const roomBody = (await parseJson(roomResponse)) as DailyRoomDetailsResponse | null;
+  const roomBody = (await parseResponseBodyAsJson(roomResponse)) as DailyRoomDetailsResponse | null;
   const roomExpiration = roomBody?.config?.exp;
 
   return typeof roomExpiration === 'number' ? roomExpiration : null;
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return Response.json({ error: 'Failed to reach Daily meeting token API.' }, { status: 502 });
   }
 
-  const tokenBody = await parseJson(tokenResponse);
+  const tokenBody = await parseResponseBodyAsJson(tokenResponse);
 
   if (!tokenResponse.ok) {
     const upstreamError =

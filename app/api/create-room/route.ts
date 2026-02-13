@@ -25,7 +25,7 @@ type PreflightErrorResponse = {
   };
 };
 
-async function tryParseJson(response: Response): Promise<unknown | null> {
+async function parseResponseBodyAsJson(response: Response): Promise<unknown | null> {
   try {
     return await response.json();
   } catch {
@@ -33,7 +33,7 @@ async function tryParseJson(response: Response): Promise<unknown | null> {
   }
 }
 
-async function tryParseRequestJson(request: Request): Promise<unknown | null> {
+async function parseRequestBodyAsJson(request: Request): Promise<unknown | null> {
   try {
     return await request.json();
   } catch {
@@ -66,7 +66,7 @@ function buildPreflightErrorResponse(failures: CreatorPreflightFailure[]): Prefl
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const parsedBody = await tryParseRequestJson(request);
+  const parsedBody = await parseRequestBodyAsJson(request);
   const creatorIdentityId = getCreatorIdentityId(parsedBody);
 
   const preflightResult = await evaluateCreatorPreflight({
@@ -109,7 +109,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Failed to reach Daily rooms API.' }, { status: 502 });
   }
 
-  const upstreamBody = await tryParseJson(upstreamResponse);
+  const upstreamBody = await parseResponseBodyAsJson(upstreamResponse);
 
   if (!upstreamResponse.ok) {
     const upstreamErrorMessage =
