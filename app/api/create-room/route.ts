@@ -5,6 +5,7 @@ import {
   type CreatorPreflightFailure,
 } from '@/lib/creatorGate';
 import { createUniqueRoomName } from '@/lib/roomName';
+import { parseRequestBodyAsJson, parseResponseBodyAsJson } from '@/lib/jsonUtils';
 
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
 const ROOM_EXPIRATION_SECONDS = 1800;
@@ -24,22 +25,6 @@ type PreflightErrorResponse = {
     failures: CreatorPreflightFailure[];
   };
 };
-
-async function parseResponseBodyAsJson(response: Response): Promise<unknown | null> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
-async function parseRequestBodyAsJson(request: Request): Promise<unknown | null> {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
 
 function getCreatorIdentityId(parsedBody: unknown): string {
   if (!parsedBody || typeof parsedBody !== 'object') {

@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { parseResponseBodyAsJson } from '@/lib/jsonUtils';
 
 const DAILY_MEETING_TOKENS_URL = 'https://api.daily.co/v1/meeting-tokens';
 const DAILY_ROOMS_URL = 'https://api.daily.co/v1/rooms';
@@ -46,14 +47,6 @@ export function getTokenExpiration(nowEpochSeconds: number, roomExpiration: numb
 
 function getRole(input: unknown): JoinRole {
   return input === 'creator' ? 'creator' : 'viewer';
-}
-
-async function parseResponseBodyAsJson(response: Response): Promise<unknown | null> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
 }
 
 async function fetchRoomExpiration(roomName: string, apiKey: string): Promise<number | null> {
