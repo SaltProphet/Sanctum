@@ -1,3 +1,4 @@
+import { appRoutes } from '@/lib/routes';
 import { createViewerSessionId, SESSION_COOKIE_NAME } from '@/lib/watermark';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -51,7 +52,7 @@ export function middleware(req: NextRequest) {
 
   if (country === 'US' && region && BLOCKED_US_STATE_SET.has(region)) {
     const blockedUrl = req.nextUrl.clone();
-    blockedUrl.pathname = '/blocked';
+    blockedUrl.pathname = appRoutes.blocked();
     blockedUrl.search = '';
 
     return attachViewerSessionCookie(req, NextResponse.redirect(blockedUrl));
