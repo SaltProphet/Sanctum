@@ -60,8 +60,13 @@ const ANALYTICS_STORAGE_KEY = 'sanctum.creator.onboarding.analytics';
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(password));
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  // Use for-loop for better performance - avoids intermediate array creation
+  const bytes = new Uint8Array(hashBuffer);
+  let hex = '';
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i].toString(16).padStart(2, '0');
+  }
+  return hex;
 }
 
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
@@ -149,8 +154,6 @@ export default function DashboardPage() {
     return () => window.clearInterval(interval);
   }, []);
 
-  const isAuthed = Boolean(account && sessionEmail && account.email === sessionEmail);
-
   const refreshDepositStatus = useCallback(async () => {
     if (!account) {
       setDepositStatus('deposit_missing');
@@ -165,14 +168,14 @@ export default function DashboardPage() {
       setDepositStatus('deposit_missing');
     }
 
-    if (storedAccount.onboardingStatus) {
-      setOnboardingStatus(parseBackendCreatorStatus(storedAccount.onboardingStatus));
+    if (account?.onboardingStatus) {
+      setOnboardingStatus(parseBackendCreatorStatus(account.onboardingStatus));
       return;
     }
 
     const envStatus = parseBackendCreatorStatus(process.env.NEXT_PUBLIC_CREATOR_ONBOARDING_STATUS);
     setOnboardingStatus(envStatus);
-  }, []);
+  }, [account]);
 
   useEffect(() => {
     if (!isAuthed || !account) {
@@ -196,14 +199,16 @@ export default function DashboardPage() {
         existingEvents = [];
       }
     }
-    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify([...existingEvents, event]));
+    // Keep only last 100 events to prevent unbounded growth
+    const MAX_ANALYTICS_EVENTS = 100;
+    const updatedEvents = [...existingEvents, event].slice(-MAX_ANALYTICS_EVENTS);
+    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify(updatedEvents));
 
     const { dataLayer } = window as Window & { dataLayer?: unknown[] };
     if (Array.isArray(dataLayer)) {
       dataLayer.push(event);
     }
   }, [account, isAuthed, onboardingStatus]);
-  }, [account]);
 
   useEffect(() => {
     if (!isAuthed) {
@@ -524,9 +529,9 @@ export default function DashboardPage() {
     return typeof window === 'undefined' ? `/c/${account.customSlug}` : `${window.location.origin}/c/${account.customSlug}`;
   }, [account]);
 
-  const onboardingView = getOnboardingStatusView(onboardingStatus);
-  const onboardingSteps = buildOnboardingSteps(onboardingStatus);
-  const isDashboardLocked = onboardingStatus !== 'active';
+  const onboardingView = useMemo(() => getOnboardingStatusView(onboardingStatus), [onboardingStatus]);
+  const onboardingSteps = useMemo(() => buildOnboardingSteps(onboardingStatus), [onboardingStatus]);
+  const isDashboardLocked = useMemo(() => onboardingStatus !== 'active', [onboardingStatus]);
 
   if (!isAuthed) {
     return (
