@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { appRoutes } from '@/lib/routes';
 
 const prohibitedJurisdictions = [
   'TX',
@@ -71,7 +72,7 @@ export default function TermsPage() {
           <p className="text-slate-200">If you have questions about these terms, contact support before using the service.</p>
         </section>
 
-        <Link className="inline-flex text-neon-green hover:underline" href="/">
+        <Link className="inline-flex text-neon-green hover:underline" href={appRoutes.home()}>
           Return to home
         </Link>
       </div>
