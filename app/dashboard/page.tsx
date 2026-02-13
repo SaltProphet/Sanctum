@@ -15,7 +15,6 @@ type CreateRoomResponse = {
   name?: string;
   url?: string;
 };
-import { getNightPassRemaining } from "@/lib/countdown";
 
 type BurnerRoom = {
   id: string;
@@ -29,54 +28,31 @@ type CreatorAccount = {
   displayName: string;
   customSlug: string;
   slugChangeUsed: boolean;
-  credits: number;
   rooms: BurnerRoom[];
   onboardingStatus?: BackendCreatorStatus;
   onboardingReferenceId?: string;
 };
 
-type DepositStatus =
-  | "deposit_missing"
-  | "deposit_pending"
-  | "deposit_paid"
-  | "deposit_failed"
-  | "deposit_refunded";
+type AuthMode = 'login' | 'register';
 
-type DepositStatusResponse = {
-  status?: DepositStatus;
-};
+const ACCOUNT_STORAGE_KEY = 'sanctum.creator.account';
+const SESSION_STORAGE_KEY = 'sanctum.creator.session';
 
-type AuthMode = "login" | "register";
-
-const ACCOUNT_STORAGE_KEY = "sanctum.creator.account";
-const SESSION_STORAGE_KEY = "sanctum.creator.session";
-const ANALYTICS_STORAGE_KEY = "sanctum.creator.onboarding.analytics";
-
-/**
- * Simple hash function for password verification in demo/prototype environment.
- * WARNING: This is NOT suitable for production. Passwords should never be stored
- * on the client side. Use proper server-side authentication in production.
- */
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest(
-    "SHA-256",
-    encoder.encode(password),
-  );
-  // Use for-loop for better performance - avoids intermediate array creation
-  const bytes = new Uint8Array(hashBuffer);
-  let hex = "";
-  for (let i = 0; i < bytes.length; i++) {
-    hex += bytes[i].toString(16).padStart(2, "0");
-  }
-  return hex;
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function verifyPassword(
-  password: string,
-  hash: string,
-): Promise<boolean> {
-  return (await hashPassword(password)) === hash;
+/**
+ * Verify a password against its hash.
+ * WARNING: This is NOT suitable for production.
+ */
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  const passwordHash = await hashPassword(password);
+  return passwordHash === hash;
 }
 
 function toSlug(input: string): string {
@@ -90,23 +66,21 @@ function toSlug(input: string): string {
     .slice(0, 30);
 }
 
-function isValidSlug(slug: string): boolean {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
-}
-
 function readStoredAccount(): CreatorAccount | null {
   const rawAccount = window.localStorage.getItem(ACCOUNT_STORAGE_KEY);
-  if (!rawAccount) return null;
+
+  if (!rawAccount) {
+    return null;
+  }
 
   try {
     const parsed = JSON.parse(rawAccount) as CreatorAccount;
-    if (!parsed.email || !parsed.passwordHash || !parsed.customSlug)
+
+    if (!parsed.email || !parsed.passwordHash || !parsed.customSlug) {
       return null;
-    return {
-      ...parsed,
-      credits: parsed.credits ?? 3,
-      rooms: parsed.rooms ?? [],
-    };
+    }
+
+    return parsed;
   } catch {
     return null;
   }
@@ -116,72 +90,100 @@ function writeStoredAccount(account: CreatorAccount) {
   window.localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(account));
 }
 
-export default function DashboardPage() {
-  const [authMode, setAuthMode] = useState<AuthMode>("login");
-  const [sessionEmail, setSessionEmail] = useState("");
-  const [account, setAccount] = useState<CreatorAccount | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState("");
-  const [clock, setClock] = useState(Date.now());
+type PreflightFailure = {
+  gate?: unknown;
+  message?: unknown;
+};
 
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [registerName, setRegisterName] = useState("");
-  const [registerEmail, setRegisterEmail] = useState("");
-  const [registerPassword, setRegisterPassword] = useState("");
-  const [registerSlug, setRegisterSlug] = useState("");
+type CreateRoomErrorResponse = {
+  error?: {
+    code?: unknown;
+    message?: unknown;
+    failures?: unknown;
+  };
+};
+
+function parseCreateRoomError(data: unknown): string {
+  if (!data || typeof data !== 'object') {
+    return 'Unable to generate link. Please try again.';
+  }
+
+  const parsed = data as CreateRoomErrorResponse;
+  const errorMessage = typeof parsed.error?.message === 'string' ? parsed.error.message : null;
+
+  if (parsed.error?.code !== 'CREATOR_PREFLIGHT_FAILED') {
+    return errorMessage ?? 'Unable to generate link. Please try again.';
+  }
+
+  const failures = Array.isArray(parsed.error.failures) ? (parsed.error.failures as PreflightFailure[]) : [];
+
+  if (failures.length === 0) {
+    return errorMessage ?? 'Room creation is blocked until creator checks pass.';
+  }
+
+  const details = failures
+    .map((failure) => {
+      const gate =
+        failure.gate === 'payment'
+          ? 'Payment'
+          : failure.gate === 'verification'
+            ? 'Verification'
+            : 'Preflight';
+
+      const message = typeof failure.message === 'string' ? failure.message : 'Check failed.';
+      return `${gate}: ${message}`;
+    })
+    .join(' ');
+
+  return details;
+}
+
+export default function DashboardPage() {
+  const [hydrated, setHydrated] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [sessionEmail, setSessionEmail] = useState('');
+  const [account, setAccount] = useState<CreatorAccount | null>(null);
+
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
+  const [registerName, setRegisterName] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerSlug, setRegisterSlug] = useState('');
 
   const [newSlug, setNewSlug] = useState("");
 
   const [roomUrl, setRoomUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState("");
-  const [authFeedback, setAuthFeedback] = useState("");
-  const [onboardingStatus, setOnboardingStatus] =
-    useState<BackendCreatorStatus>("account_created");
-  const [onboardingEventMessage, setOnboardingEventMessage] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState('');
+  const [authFeedback, setAuthFeedback] = useState('');
+  const [onboardingStatus, setOnboardingStatus] = useState<BackendCreatorStatus>('account_created');
+  const [onboardingEventMessage, setOnboardingEventMessage] = useState('');
 
-  const isAuthed = Boolean(
-    account && sessionEmail && account.email === sessionEmail,
-  );
-  const [depositStatus, setDepositStatus] =
-    useState<DepositStatus>("deposit_missing");
-  const [depositFeedback, setDepositFeedback] = useState("");
-  const [isInitiatingDeposit, setIsInitiatingDeposit] = useState(false);
+  const isAuthed = Boolean(account && sessionEmail && account.email === sessionEmail);
 
   useEffect(() => {
-    const session = window.localStorage.getItem(SESSION_STORAGE_KEY) ?? "";
-    const stored = readStoredAccount();
+    setHydrated(true);
+
+    const session = window.localStorage.getItem(SESSION_STORAGE_KEY) ?? '';
+    const storedAccount = readStoredAccount();
+
     setSessionEmail(session);
-    setAccount(stored);
-    if (!stored) setAuthMode("register");
-  }, []);
+    setAccount(storedAccount);
 
-  useEffect(() => {
-    const interval = window.setInterval(() => setClock(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  const refreshDepositStatus = useCallback(async () => {
-    if (!account) {
-      setDepositStatus("deposit_missing");
+    if (!storedAccount) {
+      setAuthMode('register');
       return;
     }
 
-    try {
-      const response = await fetch(
-        `/api/payments/deposit/status?creator_id=${encodeURIComponent(account.customSlug)}`,
-      );
-      const data = (await response.json()) as DepositStatusResponse;
-      setDepositStatus(
-        response.ok && data.status ? data.status : "deposit_missing",
-      );
-    } catch {
-      setDepositStatus("deposit_missing");
+    if (storedAccount.customSlug) {
+      setRegisterSlug(storedAccount.customSlug);
+      setNewSlug(storedAccount.customSlug);
     }
 
-    if (account?.onboardingStatus) {
-      setOnboardingStatus(parseBackendCreatorStatus(account.onboardingStatus));
+    if (storedAccount.onboardingStatus) {
+      setOnboardingStatus(parseBackendCreatorStatus(storedAccount.onboardingStatus));
       return;
     }
 
@@ -189,7 +191,7 @@ export default function DashboardPage() {
       process.env.NEXT_PUBLIC_CREATOR_ONBOARDING_STATUS,
     );
     setOnboardingStatus(envStatus);
-  }, [account]);
+  }, []);
 
   useEffect(() => {
     if (!isAuthed || !account) {
@@ -204,97 +206,25 @@ export default function DashboardPage() {
       timestamp: new Date().toISOString(),
     };
 
-    const existingRaw = window.localStorage.getItem(ANALYTICS_STORAGE_KEY);
-    let existingEvents: unknown[] = [];
-    if (existingRaw) {
-      try {
-        existingEvents = JSON.parse(existingRaw) as unknown[];
-      } catch {
-        existingEvents = [];
+      const stored = readStoredAccount();
+      if (!stored || stored.email.toLowerCase() !== loginEmail.trim().toLowerCase()) {
+        setAuthLoading(false);
+        setAuthFeedback('No account found for this email.');
+        return;
       }
+
+      const valid = await verifyPassword(loginPassword, stored.passwordHash);
+      if (!valid) {
+        setAuthLoading(false);
+        setAuthFeedback('Incorrect password.');
     }
-    // Keep only last 100 events to prevent unbounded growth
-    const MAX_ANALYTICS_EVENTS = 100;
-    const updatedEvents = [...existingEvents, event].slice(
-      -MAX_ANALYTICS_EVENTS,
-    );
-    window.localStorage.setItem(
-      ANALYTICS_STORAGE_KEY,
-      JSON.stringify(updatedEvents),
-    );
+    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify([...existingEvents, event]));
 
     const { dataLayer } = window as Window & { dataLayer?: unknown[] };
     if (Array.isArray(dataLayer)) {
       dataLayer.push(event);
     }
   }, [account, isAuthed, onboardingStatus]);
-
-  useEffect(() => {
-    if (!isAuthed) {
-      return;
-    }
-
-    void refreshDepositStatus();
-  }, [isAuthed, refreshDepositStatus]);
-
-  const handleInitiateDeposit = useCallback(async () => {
-    if (!account) {
-      return;
-    }
-
-    setIsInitiatingDeposit(true);
-    setDepositFeedback("");
-
-    try {
-      const response = await fetch("/api/payments/deposit/initiate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": `deposit-${account.customSlug}-${Date.now()}`,
-        },
-        body: JSON.stringify({
-          creator_id: account.customSlug,
-          provider: "stripe",
-          amount: 500,
-          currency: "USD",
-        }),
-      });
-
-      if (!response.ok) {
-        setDepositFeedback("Unable to initiate deposit. Please retry.");
-        return;
-      }
-
-      setDepositFeedback(
-        "Deposit initiated. Room creation unlocks only after confirmed settled/succeeded webhook.",
-      );
-      await refreshDepositStatus();
-    } catch {
-      setDepositFeedback("Unable to initiate deposit. Please retry.");
-    } finally {
-      setIsInitiatingDeposit(false);
-    }
-  }, [account, refreshDepositStatus]);
-
-  const depositNextStep = useMemo(() => {
-    if (depositStatus === "deposit_paid") {
-      return "Deposit settled. You can generate room links.";
-    }
-
-    if (depositStatus === "deposit_failed") {
-      return "Deposit failed. Retry by initiating a new deposit.";
-    }
-
-    if (depositStatus === "deposit_refunded") {
-      return "Deposit refunded. Start a new deposit to continue.";
-    }
-
-    if (depositStatus === "deposit_pending") {
-      return "Deposit pending. Await provider webhook confirmation.";
-    }
-
-    return "No deposit yet. Initiate a deposit to continue.";
-  }, [depositStatus]);
 
   const creatorBaseUrl = useMemo(() => {
     if (!isAuthed || !account) {
@@ -309,18 +239,19 @@ export default function DashboardPage() {
   }, [account, isAuthed]);
 
   const handleRegister = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
+    (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      setFeedback("");
+      setAuthFeedback('');
+
       const slug = toSlug(registerSlug || registerName);
-      if (
-        !registerName ||
-        !registerEmail ||
-        !registerPassword ||
-        !slug ||
-        !isValidSlug(slug)
-      ) {
-        setFeedback("Complete all fields with a valid slug.");
+
+      if (!registerName || !registerEmail || !registerPassword) {
+        setAuthFeedback('All register fields are required.');
+        return;
+      }
+
+      if (!slug || !isValidSlug(slug)) {
+        setAuthFeedback('Choose a valid custom URL slug (letters, numbers, dashes).');
         return;
       }
 
@@ -351,121 +282,56 @@ export default function DashboardPage() {
         setFeedback("Registration complete. Cockpit armed.");
       } finally {
         setIsLoading(false);
-      }
+      });
     },
     [registerEmail, registerName, registerPassword, registerSlug],
   );
 
   const handleLogin = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
+    (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      setFeedback("");
-      const stored = readStoredAccount();
-      if (!stored) {
-        setFeedback("No account found. Register first.");
-        setAuthMode("register");
-        return;
-      }
-      if (
-        stored.email !== loginEmail.toLowerCase() ||
-        !(await verifyPassword(loginPassword, stored.passwordHash))
-      ) {
-        setFeedback("Invalid credentials.");
+      setAuthFeedback('');
+
+      const storedAccount = readStoredAccount();
+
+      if (!storedAccount) {
+        setAuthFeedback('No creator account found yet. Please register first.');
+        setAuthMode('register');
         return;
       }
 
-      window.localStorage.setItem(SESSION_STORAGE_KEY, stored.email);
-      setSessionEmail(stored.email);
-      setAccount(stored);
-      setNewSlug(stored.customSlug);
-      setOnboardingStatus(parseBackendCreatorStatus(stored.onboardingStatus));
-      setFeedback("Authenticated.");
+      if (storedAccount.email !== loginEmail.toLowerCase()) {
+        setAuthFeedback('Invalid email or password.');
+        return;
+      }
+
+      setIsLoading(true);
+
+      verifyPassword(loginPassword, storedAccount.passwordHash).then((isValid) => {
+        if (!isValid) {
+          setAuthFeedback('Invalid email or password.');
+          setIsLoading(false);
+          return;
+        }
+
+        window.localStorage.setItem(SESSION_STORAGE_KEY, storedAccount.email);
+        setSessionEmail(storedAccount.email);
+        setAccount(storedAccount);
+        setNewSlug(storedAccount.customSlug);
+        setOnboardingStatus(parseBackendCreatorStatus(storedAccount.onboardingStatus));
+        setAuthFeedback('Login successful.');
+        setIsLoading(false);
+      });
     },
     [loginEmail, loginPassword],
   );
 
   const handleLogout = useCallback(() => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
-    setSessionEmail("");
-    setAccount(null);
-    setRoomUrl("");
-    setCopyFeedback("");
-    setAuthFeedback("Logged out.");
-    setOnboardingStatus("account_created");
+    setSessionEmail('');
+    setRoomFeedback('');
+    setLatestUrl('');
   }, []);
-
-  const handleRecoverableAction = useCallback(
-    (action: OnboardingAction) => {
-      if (!account) {
-        return;
-      }
-
-      if (action.id === "retry_payment") {
-        setOnboardingEventMessage(
-          "Payment retry initiated. Confirming updated status from backend...",
-        );
-      }
-
-      if (action.id === "restart_verification") {
-        setOnboardingEventMessage(
-          "Verification session restarted. Complete ID + selfie to continue.",
-        );
-      }
-
-      if (action.id === "contact_support") {
-        const refId = account.onboardingReferenceId ?? "REF-UNKNOWN";
-        window.location.href = `mailto:support@sanctum.local?subject=Manual%20review%20request%20${refId}&body=Please%20review%20creator%20onboarding.%20Reference%20ID:%20${refId}`;
-      }
-    },
-    [account],
-  );
-
-  const handleSlugUpdate = useCallback(() => {
-    if (!account) {
-      return;
-    }
-
-    if (onboardingStatus !== "active") {
-      setAuthFeedback(
-        "Custom URL changes are locked until onboarding status is active.",
-      );
-      return;
-    }
-
-    const candidate = toSlug(newSlug);
-
-    if (!candidate || !isValidSlug(candidate)) {
-      setAuthFeedback(
-        "Custom URL is invalid. Use letters, numbers, and dashes only.",
-      );
-      return;
-    }
-
-    if (candidate === account.customSlug) {
-      setAuthFeedback("That custom URL is already active.");
-      return;
-    }
-
-    if (account.slugChangeUsed) {
-      setAuthFeedback(
-        "Your included one-time custom URL change has already been used.",
-      );
-      return;
-    }
-
-    const updatedAccount: CreatorAccount = {
-      ...account,
-      customSlug: candidate,
-      slugChangeUsed: true,
-    };
-
-    writeStoredAccount(updatedAccount);
-    setAccount(updatedAccount);
-    setNewSlug(updatedAccount.customSlug);
-    setAuthFeedback(
-      "Custom URL updated. Your one-time included change is now used.",
-    );
-  }, [account, newSlug, onboardingStatus]);
 
   const handleGenerateLink = useCallback(async () => {
     if (!account) {
@@ -480,8 +346,7 @@ export default function DashboardPage() {
     }
 
     setIsLoading(true);
-    setCopyFeedback("");
-    setFeedback("");
+    setCopyFeedback('');
 
     try {
       const response = await fetch("/api/create-room", {
@@ -489,202 +354,191 @@ export default function DashboardPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ creatorIdentityId: account.customSlug }),
+        body: JSON.stringify({ creatorIdentityId: 'dashboard-creator' }),
       });
 
-      const body = (await response.json()) as CreateRoomResponse & {
-        error?: string;
-      };
-      const nextRoomId = body.roomName ?? body.name;
-      const nextRoomUrl = body.url;
+      const responseData = (await response.json()) as unknown;
 
-      if (!response.ok || !nextRoomId || !nextRoomUrl) {
-        setFeedback(body.error ?? "Unable to generate safe link.");
-        return;
+      if (!response.ok) {
+        throw new Error(parseCreateRoomError(responseData));
       }
 
+      const data = responseData as CreateRoomResponse;
+      const roomName = data.roomName ?? data.name;
+      const canonicalPath = data.url ?? (roomName ? `/room/${roomName}` : '');
+
+      if (!canonicalPath.startsWith('/room/')) {
+        throw new Error('Response missing canonical room URL.');
+      }
+
+      const generatedUrl = `${window.location.origin}${canonicalPath}`;
       const nextRoom: BurnerRoom = {
-        id: nextRoomId,
+        id: roomName ?? canonicalPath.replace('/room/', ''),
         createdAt: new Date().toISOString(),
-        url: nextRoomUrl,
+        url: generatedUrl,
       };
 
-      const nextAccount: CreatorAccount = {
+      const updatedAccount: CreatorAccount = {
         ...account,
-        rooms: [nextRoom, ...account.rooms],
+        rooms: [nextRoom, ...account.rooms].slice(0, 25),
       };
 
-      writeStoredAccount(nextAccount);
-      setAccount(nextAccount);
-      setRoomUrl(nextRoom.url);
-      setFeedback("Safe link generated.");
-    } catch {
-      setFeedback("Unable to generate safe link.");
+      writeStoredAccount(updatedAccount);
+      setAccount(updatedAccount);
+      setRoomUrl(generatedUrl);
+    } catch (error) {
+      setRoomUrl('');
+      setCopyFeedback(error instanceof Error ? error.message : 'Unable to generate link. Please try again.');
     } finally {
       setIsLoading(false);
     }
   }, [account, onboardingStatus]);
 
-  const handleCopy = useCallback(
-    async (url: string) => {
-      if (onboardingStatus !== "active") {
-        setCopyFeedback(
-          "Copy actions are locked until onboarding status is active.",
-        );
-        return;
-      }
+  const handleCopy = useCallback(async (value: string) => {
+    if (!value) {
+      return;
+    }
 
-      const value = url.startsWith("http")
-        ? url
-        : `${window.location.origin}${url}`;
-
-      try {
-        await navigator.clipboard.writeText(value);
-        setCopyFeedback("Link copied to clipboard.");
-      } catch {
-        setCopyFeedback("Copy failed. Please copy manually.");
-      }
+  const handleToggle = useCallback(
+    (field: 'predatorWatermark' | 'geoBlockBannedStates') => {
+      if (!account) return;
+      const next = { ...account, [field]: !account[field] };
+      setAccount(next);
+      writeStoredAccount(next);
     },
-    [onboardingStatus],
+    [account],
   );
 
-  const creatorUrl = useMemo(() => {
-    if (!account) return "";
-    return typeof window === "undefined"
-      ? `/c/${account.customSlug}`
-      : `${window.location.origin}/c/${account.customSlug}`;
-  }, [account]);
+  const handleCopy = useCallback(async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setRoomFeedback('Link copied.');
+      if (navigator.vibrate) navigator.vibrate(20);
+    } catch {
+      setRoomFeedback('Copy failed.');
+    }
+  }, [onboardingStatus]);
 
-  const onboardingView = useMemo(
-    () => getOnboardingStatusView(onboardingStatus),
-    [onboardingStatus],
-  );
-  const onboardingSteps = useMemo(
-    () => buildOnboardingSteps(onboardingStatus),
-    [onboardingStatus],
-  );
-  const isDashboardLocked = useMemo(
-    () => onboardingStatus !== "active",
-    [onboardingStatus],
-  );
+  if (!hydrated) {
+    return null;
+  }
+
+  const onboardingView = getOnboardingStatusView(onboardingStatus);
+  const onboardingSteps = buildOnboardingSteps(onboardingStatus);
+  const isDashboardLocked = onboardingStatus !== 'active';
 
   if (!isAuthed) {
     return (
-      <main className="min-h-[100dvh] bg-void px-6 py-8 text-slate-100">
-        <section className="mx-auto w-full max-w-md rounded-2xl border border-slate-800 bg-black p-6">
-          <h1 className="text-2xl font-semibold text-neon-green">
-            The Iron Gate
-          </h1>
-          <p className="mt-2 text-sm text-slate-400">
-            Federal law requires verified creator identity before activation.
-          </p>
-          <div className="mt-5 flex gap-2">
+      <main className="min-h-screen bg-black px-6 py-10 text-slate-100">
+        <section className="mx-auto w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+          <h1 className="mb-5 text-2xl font-bold text-neon-green">Creator Access</h1>
+
+          <div className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-950 p-1">
             <button
-              className={`flex-1 rounded-md px-3 py-2 ${authMode === "login" ? "bg-neon-green text-black" : "bg-slate-900"}`}
-              onClick={() => setAuthMode("login")}
+              type="button"
+              onClick={() => setAuthMode('login')}
+              className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                authMode === 'login' ? 'bg-neon-green text-black' : 'text-slate-300 hover:bg-slate-800'
+              }`}
             >
-              Login
+              Log in
             </button>
             <button
-              className={`flex-1 rounded-md px-3 py-2 ${authMode === "register" ? "bg-neon-green text-black" : "bg-slate-900"}`}
-              onClick={() => setAuthMode("register")}
+              type="button"
+              onClick={() => setAuthMode('register')}
+              className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                authMode === 'register'
+                  ? 'bg-neon-green text-black'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
             >
               Register
             </button>
           </div>
 
-          {authMode === "login" ? (
-            <form className="mt-4 space-y-3" onSubmit={handleLogin}>
+          {authMode === 'login' ? (
+            <form onSubmit={handleLogin} className="space-y-3">
               <input
-                className="w-full rounded-md border border-slate-700 bg-void px-3 py-2"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
                 type="email"
                 placeholder="Email"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
               />
               <input
-                className="w-full rounded-md border border-slate-700 bg-void px-3 py-2"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
                 type="password"
                 placeholder="Password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
               />
               <button
-                className="w-full rounded-md bg-neon-green px-4 py-3 font-semibold text-black"
-                disabled={loading}
+                type="submit"
+                className="w-full rounded-md bg-neon-green px-4 py-2 font-semibold text-black"
               >
-                Authenticate
+                Log in to dashboard
               </button>
             </form>
           ) : (
-            <form className="mt-4 space-y-3" onSubmit={handleRegister}>
+            <form onSubmit={handleRegister} className="space-y-3">
               <input
-                className="w-full rounded-md border border-slate-700 bg-void px-3 py-2"
+                value={registerName}
+                onChange={(event) => setRegisterName(event.target.value)}
                 type="text"
                 placeholder="Display name"
-                value={registerName}
-                onChange={(e) => setRegisterName(e.target.value)}
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
               />
               <input
-                className="w-full rounded-md border border-slate-700 bg-void px-3 py-2"
+                value={registerEmail}
+                onChange={(event) => setRegisterEmail(event.target.value)}
                 type="email"
                 placeholder="Email"
-                value={registerEmail}
-                onChange={(e) => setRegisterEmail(e.target.value)}
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
               />
               <input
-                className="w-full rounded-md border border-slate-700 bg-void px-3 py-2"
+                value={registerPassword}
+                onChange={(event) => setRegisterPassword(event.target.value)}
                 type="password"
                 placeholder="Password"
-                value={registerPassword}
-                onChange={(e) => setRegisterPassword(e.target.value)}
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
               />
               <input
-                className="w-full rounded-md border border-slate-700 bg-void px-3 py-2"
-                type="text"
-                placeholder="Custom slug"
                 value={registerSlug}
-                onChange={(e) => setRegisterSlug(e.target.value)}
+                onChange={(event) => setRegisterSlug(event.target.value)}
+                type="text"
+                placeholder="Custom URL slug (e.g. star-coach)"
+                className="w-full rounded-md border border-slate-600 bg-black px-3 py-2"
               />
               <button
-                className="w-full rounded-md bg-neon-green px-4 py-3 font-semibold text-black"
-                disabled={loading}
+                type="submit"
+                className="w-full rounded-md bg-neon-green px-4 py-2 font-semibold text-black"
               >
-                Create account
+                Register and open dashboard
               </button>
             </form>
           )}
 
-          {feedback ? (
-            <p className="mt-3 text-sm text-slate-300">{feedback}</p>
-          ) : null}
-          <Link
-            href="/"
-            className="mt-4 inline-block text-sm text-slate-400 underline"
-          >
-            Back to site
-          </Link>
+          {authFeedback ? <p className="mt-3 text-sm text-slate-300">{authFeedback}</p> : null}
         </section>
       </main>
     );
   }
 
   return (
-    <main className="min-h-[100dvh] bg-void px-4 py-6 text-slate-100">
-      <section className="mx-auto w-full max-w-xl space-y-4 rounded-2xl border border-slate-800 bg-black p-4">
-        <header className="flex items-start justify-between">
+    <main className="min-h-screen bg-black px-6 py-10 text-slate-100">
+      <section className="mx-auto w-full max-w-3xl space-y-6 rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="mono-data text-xs uppercase tracking-[0.3em] text-neon-green">
-              Creator cockpit
-            </p>
-            <h1 className="text-xl font-semibold">The Sovereign Gate</h1>
+            <h1 className="text-2xl font-bold text-neon-green">Creator Dashboard</h1>
+            <p className="text-sm text-slate-300">Welcome back, {account?.displayName}.</p>
           </div>
-          <div className="rounded-md border border-neon-green/60 bg-neon-green/10 px-3 py-2 text-right">
-            <p className="mono-data text-xs text-slate-300">Credits</p>
-            <p className="mono-data text-lg font-semibold text-neon-green">
-              {account?.credits ?? 0}
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-md border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800"
+          >
+            Log out
+          </button>
         </header>
 
         <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
@@ -768,46 +622,12 @@ export default function DashboardPage() {
               disabled={isDashboardLocked}
               className="rounded-md bg-slate-200 px-4 py-2 text-sm font-semibold text-black"
             >
-              Apply
+              Save one-time change
             </button>
           </div>
-        </div>
-
-        <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
-          <h2 className="text-lg font-semibold text-slate-50">
-            Deposit status
-          </h2>
-          <p className="mt-2 text-sm text-slate-300">
-            Current status:{" "}
-            <span className="font-semibold text-neon-green">
-              {depositStatus}
-            </span>
+          <p className="mt-2 text-xs text-slate-400">
+            One included custom URL change: {account?.slugChangeUsed ? 'Used' : 'Available'}.
           </p>
-          <p className="mt-2 text-sm text-slate-400">{depositNextStep}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void refreshDepositStatus()}
-              className="rounded-md border border-slate-600 px-3 py-2 text-sm"
-            >
-              Refresh status
-            </button>
-            {depositStatus === "deposit_missing" ||
-            depositStatus === "deposit_failed" ||
-            depositStatus === "deposit_refunded" ? (
-              <button
-                type="button"
-                disabled={isInitiatingDeposit}
-                onClick={() => void handleInitiateDeposit()}
-                className="rounded-md bg-neon-green px-3 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:bg-slate-500"
-              >
-                {isInitiatingDeposit ? "Starting..." : "Initiate deposit"}
-              </button>
-            ) : null}
-          </div>
-          {depositFeedback ? (
-            <p className="mt-2 text-sm text-slate-300">{depositFeedback}</p>
-          ) : null}
         </div>
 
         <div
@@ -837,9 +657,7 @@ export default function DashboardPage() {
               </button>
             </div>
           ) : null}
-          {copyFeedback ? (
-            <p className="mt-2 text-sm text-slate-300">{copyFeedback}</p>
-          ) : null}
+          {copyFeedback ? <p className="mt-2 text-sm text-slate-300">{copyFeedback}</p> : null}
         </div>
 
         <div
@@ -884,28 +702,11 @@ export default function DashboardPage() {
               ))}
             </ul>
           ) : (
-            <p className="mt-2 text-sm text-slate-400">No active rooms.</p>
+            <p className="mt-2 text-sm text-slate-400">
+              No burner rooms yet. Generate your first room URL above.
+            </p>
           )}
         </div>
-
-        <div className="rounded-lg border border-slate-800 bg-void p-3">
-          <p className="mono-data text-xs text-slate-400">Static link</p>
-          <p className="mono-data mt-1 break-all text-sm text-neon-green">
-            {creatorUrl}
-          </p>
-        </div>
-
-        {feedback ? <p className="text-sm text-slate-300">{feedback}</p> : null}
-        {authFeedback ? (
-          <p className="text-sm text-slate-300">{authFeedback}</p>
-        ) : null}
-
-        <button
-          onClick={handleLogout}
-          className="w-full rounded-md border border-danger px-3 py-2 text-sm text-red-400"
-        >
-          Logout
-        </button>
       </section>
     </main>
   );
