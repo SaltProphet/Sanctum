@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   buildOnboardingSteps,
   getOnboardingStatusView,
   parseBackendCreatorStatus,
   type BackendCreatorStatus,
   type OnboardingAction,
-} from '@/lib/creatorOnboarding';
-import { appRoutes, toAbsoluteAppUrl } from '@/lib/routes';
+} from "@/lib/creatorOnboarding";
+import { getNightPassRemaining } from "@/lib/countdown";
 
 type CreateRoomResponse = {
   roomName?: string;
@@ -60,10 +60,10 @@ function toSlug(input: string): string {
   return input
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9-\s]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/[^a-z0-9-\s]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
     .slice(0, 30);
 }
 
@@ -153,9 +153,9 @@ export default function DashboardPage() {
   const [registerPassword, setRegisterPassword] = useState('');
   const [registerSlug, setRegisterSlug] = useState('');
 
-  const [newSlug, setNewSlug] = useState('');
+  const [newSlug, setNewSlug] = useState("");
 
-  const [roomUrl, setRoomUrl] = useState('');
+  const [roomUrl, setRoomUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState('');
   const [authFeedback, setAuthFeedback] = useState('');
@@ -188,7 +188,9 @@ export default function DashboardPage() {
       return;
     }
 
-    const envStatus = parseBackendCreatorStatus(process.env.NEXT_PUBLIC_CREATOR_ONBOARDING_STATUS);
+    const envStatus = parseBackendCreatorStatus(
+      process.env.NEXT_PUBLIC_CREATOR_ONBOARDING_STATUS,
+    );
     setOnboardingStatus(envStatus);
   }, []);
 
@@ -199,7 +201,7 @@ export default function DashboardPage() {
 
     const currentStep = getOnboardingStatusView(onboardingStatus).currentStep;
     const event = {
-      event: 'creator_onboarding_step_seen',
+      event: "creator_onboarding_step_seen",
       step: currentStep,
       status: onboardingStatus,
       timestamp: new Date().toISOString(),
@@ -227,11 +229,11 @@ export default function DashboardPage() {
 
   const creatorBaseUrl = useMemo(() => {
     if (!isAuthed || !account) {
-      return '';
+      return "";
     }
 
-    if (typeof window === 'undefined') {
-      return appRoutes.creator(account.customSlug);
+    if (typeof window === "undefined") {
+      return `/c/${account.customSlug}`;
     }
 
     return toAbsoluteAppUrl(appRoutes.creator(account.customSlug), window.location.origin);
@@ -256,7 +258,8 @@ export default function DashboardPage() {
 
       setIsLoading(true);
 
-      hashPassword(registerPassword).then((passwordHash) => {
+      try {
+        const passwordHash = await hashPassword(registerPassword);
         const nextAccount: CreatorAccount = {
           displayName: registerName,
           email: registerEmail.toLowerCase(),
@@ -264,7 +267,8 @@ export default function DashboardPage() {
           customSlug: slug,
           slugChangeUsed: false,
           rooms: [],
-          onboardingStatus: 'account_created',
+          credits: 3,
+          onboardingStatus: "account_created",
           onboardingReferenceId: `REF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         };
 
@@ -274,8 +278,10 @@ export default function DashboardPage() {
         setAccount(nextAccount);
         setSessionEmail(nextAccount.email);
         setNewSlug(nextAccount.customSlug);
-        setAuthFeedback('Registration complete. Welcome to your dashboard.');
-        setOnboardingStatus('account_created');
+        setAuthFeedback("Registration complete. Welcome to your dashboard.");
+        setOnboardingStatus("account_created");
+        setFeedback("Registration complete. Cockpit armed.");
+      } finally {
         setIsLoading(false);
       });
     },
@@ -333,8 +339,10 @@ export default function DashboardPage() {
       return;
     }
 
-    if (onboardingStatus !== 'active') {
-      setCopyFeedback('Dashboard features remain locked until your backend status is active.');
+    if (onboardingStatus !== "active") {
+      setCopyFeedback(
+        "Dashboard features remain locked until your backend status is active.",
+      );
       return;
     }
 
@@ -342,10 +350,10 @@ export default function DashboardPage() {
     setCopyFeedback('');
 
     try {
-      const response = await fetch('/api/create-room', {
-        method: 'POST',
+      const response = await fetch("/api/create-room", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ creatorIdentityId: 'dashboard-creator' }),
       });
@@ -535,28 +543,36 @@ export default function DashboardPage() {
         </header>
 
         <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
-          <h2 className="text-lg font-semibold text-slate-50">Creator onboarding progress</h2>
+          <h2 className="text-lg font-semibold text-slate-50">
+            Creator onboarding progress
+          </h2>
           <p className="mt-2 text-sm text-slate-300">{onboardingView.title}</p>
-          <p className="mt-1 text-sm text-slate-400">{onboardingView.description}</p>
+          <p className="mt-1 text-sm text-slate-400">
+            {onboardingView.description}
+          </p>
           <ol className="mt-4 space-y-2">
             {onboardingSteps.map((step, index) => (
-              <li key={step.id} className="flex items-center gap-3 rounded-md border border-slate-700 bg-black px-3 py-2 text-sm">
+              <li
+                key={step.id}
+                className="flex items-center gap-3 rounded-md border border-slate-700 bg-black px-3 py-2 text-sm"
+              >
                 <span
-                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
-                    step.state === 'complete'
-                      ? 'bg-neon-green text-black'
-                      : step.state === 'current'
-                        ? 'bg-slate-200 text-black'
-                        : 'bg-slate-700 text-slate-200'
-                  }`}
+                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${step.state === "complete" ? "bg-neon-green text-black" : step.state === "current" ? "bg-slate-200 text-black" : "bg-slate-700 text-slate-200"}`}
                 >
                   {index + 1}
                 </span>
-                <span className={step.state === 'upcoming' ? 'text-slate-400' : 'text-slate-100'}>{step.label}</span>
+                <span
+                  className={
+                    step.state === "upcoming"
+                      ? "text-slate-400"
+                      : "text-slate-100"
+                  }
+                >
+                  {step.label}
+                </span>
               </li>
             ))}
           </ol>
-
           {onboardingView.actions.length > 0 ? (
             <div className="mt-4 flex flex-wrap gap-2">
               {onboardingView.actions.map((action) => (
@@ -571,19 +587,28 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : null}
-
           {isDashboardLocked ? (
             <p className="mt-3 text-xs text-amber-300">
-              Dashboard features are hard-blocked until backend status returns <code>active</code>.
-              {account?.onboardingReferenceId ? ` Reference ID: ${account.onboardingReferenceId}` : ''}
+              Dashboard features are hard-blocked until backend status returns{" "}
+              <code>active</code>.
             </p>
           ) : null}
-          {onboardingEventMessage ? <p className="mt-2 text-xs text-slate-300">{onboardingEventMessage}</p> : null}
+          {onboardingEventMessage ? (
+            <p className="mt-2 text-xs text-slate-300">
+              {onboardingEventMessage}
+            </p>
+          ) : null}
         </div>
 
-        <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? 'opacity-60' : ''}`}>
-          <h2 className="text-lg font-semibold text-slate-50">Your creator URL</h2>
-          <p className="mt-2 break-all font-mono text-sm text-neon-green">{creatorBaseUrl}</p>
+        <div
+          className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? "opacity-60" : ""}`}
+        >
+          <h2 className="text-lg font-semibold text-slate-50">
+            Your creator URL
+          </h2>
+          <p className="mt-2 break-all font-mono text-sm text-neon-green">
+            {creatorBaseUrl}
+          </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
               value={newSlug}
@@ -606,14 +631,18 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? 'opacity-60' : ''}`}>
-          <h2 className="text-lg font-semibold text-slate-50">Burner room generator</h2>
+        <div
+          className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? "opacity-60" : ""}`}
+        >
+          <h2 className="text-lg font-semibold text-slate-50">
+            Burner room generator
+          </h2>
           <button
             onClick={handleGenerateLink}
             disabled={isLoading || isDashboardLocked}
             className="mt-3 w-full rounded-md bg-neon-green px-4 py-3 font-semibold text-black disabled:cursor-not-allowed disabled:bg-slate-500"
           >
-            {isLoading ? 'Generating...' : 'Create burner room URL'}
+            {isLoading ? "GENERATING…" : "[ GENERATE SAFE LINK ]"}
           </button>
           {roomUrl ? (
             <div className="mt-3 space-y-2">
@@ -622,7 +651,7 @@ export default function DashboardPage() {
               </p>
               <button
                 type="button"
-                onClick={() => handleCopy(roomUrl)}
+                onClick={() => void handleCopy(roomUrl)}
                 className="rounded-md border border-slate-600 px-3 py-2 text-sm"
               >
                 Copy latest URL
@@ -632,20 +661,27 @@ export default function DashboardPage() {
           {copyFeedback ? <p className="mt-2 text-sm text-slate-300">{copyFeedback}</p> : null}
         </div>
 
-        <div className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? 'opacity-60' : ''}`}>
-          <h2 className="text-lg font-semibold text-slate-50">Your room URLs</h2>
+        <div
+          className={`rounded-lg border border-slate-700 bg-slate-950 p-4 ${isDashboardLocked ? "opacity-60" : ""}`}
+        >
+          <h2 className="text-lg font-semibold text-slate-50">Active rooms</h2>
           {account && account.rooms.length > 0 ? (
             <ul className="mt-3 space-y-2">
               {account.rooms.map((room) => (
-                <li key={room.id} className="rounded-md border border-slate-700 bg-black p-3 text-sm">
-                  <p className="break-all font-mono text-neon-green">{room.url}</p>
+                <li
+                  key={room.id}
+                  className="rounded-md border border-slate-700 bg-black p-3 text-sm"
+                >
+                  <p className="break-all font-mono text-neon-green">
+                    {room.url}
+                  </p>
                   <p className="mt-1 text-xs text-slate-400">
-                    Created: {new Date(room.createdAt).toLocaleString()}
+                    Expires in {getNightPassRemaining(room.createdAt, clock)}
                   </p>
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"
-                      onClick={() => handleCopy(room.url)}
+                      onClick={() => void handleCopy(room.url)}
                       className="rounded border border-slate-600 px-2 py-1 text-xs"
                     >
                       Copy
