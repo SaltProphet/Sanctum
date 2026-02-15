@@ -23,6 +23,12 @@ const BLOCKED_US_STATE_CODES = [
 
 const BLOCKED_US_STATE_SET = new Set<string>(BLOCKED_US_STATE_CODES);
 
+// Whitelisted IPs for admin/dev access
+const WHITELISTED_IPS = new Set<string>([
+  '66.51.114.118',              // Admin IPv4
+  '2605:940:612:7600::',        // Admin IPv6
+]);
+
 function attachViewerSessionCookie(req: NextRequest, response: NextResponse): NextResponse {
   let sessionId = req.cookies.get(SESSION_COOKIE_NAME)?.value;
 
@@ -47,6 +53,14 @@ function attachViewerSessionCookie(req: NextRequest, response: NextResponse): Ne
 }
 
 export function middleware(req: NextRequest) {
+  // Check if IP is whitelisted first (allows admin/dev access from blocked regions)
+  const clientIp = req.ip ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip');
+  
+  if (clientIp && WHITELISTED_IPS.has(clientIp)) {
+    return attachViewerSessionCookie(req, NextResponse.next());
+  }
+
+  // Then check geo-blocking
   const country = req.geo?.country ?? req.headers.get('x-vercel-ip-country') ?? undefined;
   const region = req.geo?.region ?? req.headers.get('x-vercel-ip-country-region') ?? undefined;
 
