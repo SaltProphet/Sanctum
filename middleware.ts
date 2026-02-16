@@ -60,17 +60,17 @@ export function middleware(req: NextRequest) {
     return attachViewerSessionCookie(req, NextResponse.next());
   }
 
-  // Then check geo-blocking
-  const country = req.geo?.country ?? req.headers.get('x-vercel-ip-country') ?? undefined;
-  const region = req.geo?.region ?? req.headers.get('x-vercel-ip-country-region') ?? undefined;
+  // TEMPORARILY DISABLED: Geo-blocking logic
+  // const country = req.geo?.country ?? req.headers.get('x-vercel-ip-country') ?? undefined;
+  // const region = req.geo?.region ?? req.headers.get('x-vercel-ip-country-region') ?? undefined;
 
-  if (country === 'US' && region && BLOCKED_US_STATE_SET.has(region)) {
-    const blockedUrl = req.nextUrl.clone();
-    blockedUrl.pathname = appRoutes.blocked();
-    blockedUrl.search = '';
+  // if (country === 'US' && region && BLOCKED_US_STATE_SET.has(region)) {
+  //   const blockedUrl = req.nextUrl.clone();
+  //   blockedUrl.pathname = appRoutes.blocked();
+  //   blockedUrl.search = '';
 
-    return attachViewerSessionCookie(req, NextResponse.redirect(blockedUrl));
-  }
+  //   return attachViewerSessionCookie(req, NextResponse.redirect(blockedUrl));
+  // }
 
   return attachViewerSessionCookie(req, NextResponse.next());
 }
