@@ -2,6 +2,9 @@ import { appRoutes } from '@/lib/routes';
 import { createViewerSessionId, SESSION_COOKIE_NAME } from '@/lib/watermark';
 import { NextRequest, NextResponse } from 'next/server';
 
+// Feature flag to enable/disable geo-blocking
+const ENABLE_GEO_BLOCKING = process.env.ENABLE_GEO_BLOCKING === 'true';
+
 const BLOCKED_US_STATE_CODES = [
   'TX',
   'LA',
@@ -60,17 +63,19 @@ export function middleware(req: NextRequest) {
     return attachViewerSessionCookie(req, NextResponse.next());
   }
 
-  // TEMPORARILY DISABLED: Geo-blocking logic
-  // const country = req.geo?.country ?? req.headers.get('x-vercel-ip-country') ?? undefined;
-  // const region = req.geo?.region ?? req.headers.get('x-vercel-ip-country-region') ?? undefined;
+  // Check geo-blocking if enabled
+  if (ENABLE_GEO_BLOCKING) {
+    const country = req.geo?.country ?? req.headers.get('x-vercel-ip-country') ?? undefined;
+    const region = req.geo?.region ?? req.headers.get('x-vercel-ip-country-region') ?? undefined;
 
-  // if (country === 'US' && region && BLOCKED_US_STATE_SET.has(region)) {
-  //   const blockedUrl = req.nextUrl.clone();
-  //   blockedUrl.pathname = appRoutes.blocked();
-  //   blockedUrl.search = '';
+    if (country === 'US' && region && BLOCKED_US_STATE_SET.has(region)) {
+      const blockedUrl = req.nextUrl.clone();
+      blockedUrl.pathname = appRoutes.blocked();
+      blockedUrl.search = '';
 
-  //   return attachViewerSessionCookie(req, NextResponse.redirect(blockedUrl));
-  // }
+      return attachViewerSessionCookie(req, NextResponse.redirect(blockedUrl));
+    }
+  }
 
   return attachViewerSessionCookie(req, NextResponse.next());
 }
