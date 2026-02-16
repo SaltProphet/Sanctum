@@ -1,18 +1,6 @@
-export type CreatorTier = 'burner' | 'professional' | 'empire';
+import { createHmac } from 'crypto';
 
-// Conditional crypto import for server environments
-let createHmacFunc: ((algorithm: string, key: string) => { update: (data: string) => { digest: (encoding: string) => string } }) | null = null;
-try {
-  // Use dynamic import to avoid bundling issues
-  if (typeof process !== 'undefined' && process.versions?.node) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const crypto = require('crypto');
-    createHmacFunc = crypto.createHmac;
-  }
-} catch {
-  // Crypto not available
-  createHmacFunc = null;
-}
+export type CreatorTier = 'burner' | 'professional' | 'empire';
 
 export type BrandingWatermark =
   | { kind: 'sanctum'; src: string; alt: string }
@@ -75,24 +63,19 @@ function computeHmacHash(value: string): string {
   // Check cache first
   const cached = hashCache.get(value);
   if (cached) {
-    // Move to end for LRU (delete and re-insert)
+    // Move to end for true LRU (delete and re-insert on access)
     hashCache.delete(value);
     hashCache.set(value, cached);
     return cached;
   }
 
-  // Use native Node.js crypto for better performance
-  let hash: string;
-  if (createHmacFunc) {
-    hash = createHmacFunc('sha256', getHashSecret())
-      .update(value)
-      .digest('hex');
-  } else {
-    // Fallback for environments without node:crypto
-    hash = simpleHash(value);
-  }
+  // Use native Node.js crypto HMAC-SHA256
+  // watermark.ts is only used server-side (API routes, middleware, server components)
+  const hash = createHmac('sha256', getHashSecret())
+    .update(value)
+    .digest('hex');
 
-  // Store in cache with LRU eviction (remove oldest = first key)
+  // Store in cache with FIFO eviction when at capacity
   hashCache.set(value, hash);
   if (hashCache.size > MAX_HASH_CACHE_SIZE) {
     const firstKey = hashCache.keys().next().value;
@@ -102,21 +85,6 @@ function computeHmacHash(value: string): string {
   }
 
   return hash;
-}
-
-// Simple hash fallback for edge environments
-function simpleHash(value: string): string {
-  const input = `${getHashSecret()}:${value}`;
-  let hashA = 5381;
-  let hashB = 52711;
-
-  for (let index = 0; index < input.length; index += 1) {
-    const code = input.charCodeAt(index);
-    hashA = (hashA * 33) ^ code;
-    hashB = (hashB * 31) ^ (code << 1);
-  }
-
-  return `${(hashA >>> 0).toString(16).padStart(8, '0')}${(hashB >>> 0).toString(16).padStart(8, '0')}`.repeat(4);
 }
 
 function isValidIpv4(value: string): boolean {

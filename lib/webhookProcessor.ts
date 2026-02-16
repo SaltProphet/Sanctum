@@ -59,8 +59,7 @@ function pruneReplayCache(now: number): void {
     }
   }
 
-  // If still over capacity after expiration, remove oldest entries
-  // Note: This is a simple FIFO eviction. For production, consider using a proper LRU cache library
+  // If still over capacity after expiration, remove oldest entries (FIFO eviction)
   if (replayCache.size > MAX_REPLAY_CACHE_SIZE) {
     let removeCount = replayCache.size - MAX_REPLAY_CACHE_SIZE;
     for (const [key] of replayCache) {
@@ -153,8 +152,8 @@ export function applyWebhookEvent(input: ApplyWebhookEventInput): CreatorState {
 
   creatorState.set(input.creatorId, existing);
 
-  // Enforce max size by removing oldest entries (simple FIFO eviction)
-  // Note: For production with high volume, consider using a proper LRU cache library
+  // Enforce max size by removing oldest entries (FIFO eviction)
+  // Only run eviction when size limit is exceeded to avoid unnecessary work
   if (creatorState.size > MAX_CREATOR_STATE_SIZE) {
     let removeCount = creatorState.size - MAX_CREATOR_STATE_SIZE;
     for (const [key] of creatorState) {

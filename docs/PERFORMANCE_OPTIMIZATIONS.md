@@ -9,8 +9,8 @@ This document describes the performance optimizations applied to the Sanctum cod
 **Issue**: Unbounded growth of in-memory caches leading to memory leaks in production.
 
 **Changes**:
-- Added `MAX_REPLAY_CACHE_SIZE = 10000` limit with LRU (Least Recently Used) eviction
-- Added `MAX_CREATOR_STATE_SIZE = 5000` limit with LRU eviction based on last update timestamp
+- Added `MAX_REPLAY_CACHE_SIZE = 10000` limit with age-based eviction (removes entries older than 24h)
+- Added `MAX_CREATOR_STATE_SIZE = 5000` limit with FIFO eviction (removes oldest entries by insertion time)
 - Enhanced `pruneReplayCache()` to enforce size limits in addition to time-based cleanup
 - Modified `applyWebhookEvent()` to automatically evict oldest entries when limits are exceeded
 
@@ -24,9 +24,8 @@ This document describes the performance optimizations applied to the Sanctum cod
 
 **Changes**:
 - Replaced custom hash with Node.js native `crypto.createHmac()` which uses optimized C++ bindings
-- Uses dynamic `require('crypto')` to avoid bundling issues with Edge runtime
-- Maintains backward-compatible fallback for edge environments
-- Added hash result caching with LRU eviction (MAX_HASH_CACHE_SIZE = 1000)
+- Uses standard ES import since watermark.ts only runs server-side (middleware, API routes, server components)
+- Added hash result caching with true LRU on access + FIFO eviction when at capacity (MAX_HASH_CACHE_SIZE = 1000)
 
 **Impact**: 
 - **~10-100x faster** hash computation using native implementation vs. JavaScript loops
