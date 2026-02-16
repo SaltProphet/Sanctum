@@ -5,6 +5,8 @@ export type WebhookEventType = 'verified' | 'unverified' | 'settled' | 'unsettle
 
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
 const REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const MAX_REPLAY_CACHE_SIZE = 10000;
+const MAX_CREATOR_STATE_SIZE = 5000;
 
 type ReplayEntry = {
   seenAt: number;
@@ -50,9 +52,19 @@ function safeEqualHex(leftHex: string, rightHex: string): boolean {
 }
 
 function pruneReplayCache(now: number): void {
+  // Remove expired entries
   for (const [eventKey, entry] of replayCache) {
     if (now - entry.seenAt > REPLAY_WINDOW_MS) {
       replayCache.delete(eventKey);
+    }
+  }
+
+  // If still over capacity, remove oldest entries (LRU eviction)
+  if (replayCache.size > MAX_REPLAY_CACHE_SIZE) {
+    const entries = Array.from(replayCache.entries()).sort((a, b) => a[1].seenAt - b[1].seenAt);
+    const toRemove = entries.slice(0, replayCache.size - MAX_REPLAY_CACHE_SIZE);
+    for (const [key] of toRemove) {
+      replayCache.delete(key);
     }
   }
 }
@@ -138,6 +150,20 @@ export function applyWebhookEvent(input: ApplyWebhookEventInput): CreatorState {
   }
 
   creatorState.set(input.creatorId, existing);
+
+  // Enforce max size by removing oldest entries (LRU eviction)
+  if (creatorState.size > MAX_CREATOR_STATE_SIZE) {
+    const entries = Array.from(creatorState.entries()).sort((a, b) => {
+      const aTime = Math.max(a[1].verificationUpdatedAt, a[1].paymentUpdatedAt);
+      const bTime = Math.max(b[1].verificationUpdatedAt, b[1].paymentUpdatedAt);
+      return aTime - bTime;
+    });
+    const toRemove = entries.slice(0, creatorState.size - MAX_CREATOR_STATE_SIZE);
+    for (const [key] of toRemove) {
+      creatorState.delete(key);
+    }
+  }
+
   return { ...existing };
 }
 

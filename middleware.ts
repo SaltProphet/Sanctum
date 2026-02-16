@@ -54,7 +54,7 @@ function attachViewerSessionCookie(req: NextRequest, response: NextResponse): Ne
 
 export function middleware(req: NextRequest) {
   // Check if IP is whitelisted first (allows admin/dev access from blocked regions)
-  const clientIp = req.ip ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip');
+  const clientIp = req.ip ?? req.headers.get('x-forwarded-for')?.split(',', 1)[0]?.trim() ?? req.headers.get('x-real-ip');
   
   if (clientIp && WHITELISTED_IPS.has(clientIp)) {
     return attachViewerSessionCookie(req, NextResponse.next());

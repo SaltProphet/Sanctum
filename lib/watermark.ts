@@ -53,7 +53,46 @@ function getHashSecret() {
   return process.env.WATERMARK_HASH_SECRET || process.env.DAILY_API_KEY || 'sanctum-dev-secret';
 }
 
+// Cache for hash computations to avoid redundant calculations
+const hashCache = new Map<string, string>();
+const MAX_HASH_CACHE_SIZE = 1000;
+
 function computeHmacHash(value: string): string {
+  // Check cache first
+  const cached = hashCache.get(value);
+  if (cached) {
+    return cached;
+  }
+
+  // Use native Node.js crypto for better performance
+  // Dynamic import to avoid bundling in edge/client environments
+  let hash: string;
+  if (typeof require !== 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createHmac } = require('crypto');
+    hash = createHmac('sha256', getHashSecret())
+      .update(value)
+      .digest('hex');
+  } else {
+    // Fallback for environments without node:crypto
+    // This shouldn't happen in server contexts, but provides safety
+    hash = simpleHash(value);
+  }
+
+  // Store in cache with LRU eviction
+  hashCache.set(value, hash);
+  if (hashCache.size > MAX_HASH_CACHE_SIZE) {
+    const firstKey = hashCache.keys().next().value;
+    if (firstKey !== undefined) {
+      hashCache.delete(firstKey);
+    }
+  }
+
+  return hash;
+}
+
+// Simple hash fallback for edge environments
+function simpleHash(value: string): string {
   const input = `${getHashSecret()}:${value}`;
   let hashA = 5381;
   let hashB = 52711;
