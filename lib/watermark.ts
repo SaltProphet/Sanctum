@@ -1,5 +1,19 @@
 export type CreatorTier = 'burner' | 'professional' | 'empire';
 
+// Conditional crypto import for server environments
+let createHmacFunc: ((algorithm: string, key: string) => { update: (data: string) => { digest: (encoding: string) => string } }) | null = null;
+try {
+  // Use dynamic import to avoid bundling issues
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const crypto = require('crypto');
+    createHmacFunc = crypto.createHmac;
+  }
+} catch {
+  // Crypto not available
+  createHmacFunc = null;
+}
+
 export type BrandingWatermark =
   | { kind: 'sanctum'; src: string; alt: string }
   | { kind: 'custom'; src: string; alt: string }
@@ -61,25 +75,24 @@ function computeHmacHash(value: string): string {
   // Check cache first
   const cached = hashCache.get(value);
   if (cached) {
+    // Move to end for LRU (delete and re-insert)
+    hashCache.delete(value);
+    hashCache.set(value, cached);
     return cached;
   }
 
   // Use native Node.js crypto for better performance
-  // Dynamic import to avoid bundling in edge/client environments
   let hash: string;
-  if (typeof require !== 'undefined') {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createHmac } = require('crypto');
-    hash = createHmac('sha256', getHashSecret())
+  if (createHmacFunc) {
+    hash = createHmacFunc('sha256', getHashSecret())
       .update(value)
       .digest('hex');
   } else {
     // Fallback for environments without node:crypto
-    // This shouldn't happen in server contexts, but provides safety
     hash = simpleHash(value);
   }
 
-  // Store in cache with LRU eviction
+  // Store in cache with LRU eviction (remove oldest = first key)
   hashCache.set(value, hash);
   if (hashCache.size > MAX_HASH_CACHE_SIZE) {
     const firstKey = hashCache.keys().next().value;
