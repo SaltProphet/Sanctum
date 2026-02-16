@@ -88,3 +88,27 @@ test('watermark metadata is deterministic and matches expected shape', () => {
   assert.equal(first.watermarkId.length, 64);
   assert.notEqual(first.watermarkId, '203.0.113.100');
 });
+
+test('hash caching returns consistent results', () => {
+  // Generate hash for same input multiple times
+  const ip1 = '192.0.2.1';
+  const hash1 = getClientIpHash(ip1);
+  const hash2 = getClientIpHash(ip1);
+  const hash3 = getClientIpHash(ip1);
+  
+  // All should be identical (and use cached value)
+  assert.equal(hash1, hash2);
+  assert.equal(hash2, hash3);
+  assert.equal(hash1.length, 64);
+});
+
+test('hash produces different outputs for different inputs', () => {
+  const hash1 = getClientIpHash('192.0.2.1');
+  const hash2 = getClientIpHash('192.0.2.2');
+  const hash3 = getClientIpHash('192.0.2.3');
+  
+  // All should be different
+  assert.notEqual(hash1, hash2);
+  assert.notEqual(hash2, hash3);
+  assert.notEqual(hash1, hash3);
+});
