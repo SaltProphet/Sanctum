@@ -40,6 +40,7 @@ type AuthMode = 'login' | 'register';
 const ACCOUNT_STORAGE_KEY = 'sanctum.creator.account';
 const SESSION_STORAGE_KEY = 'sanctum.creator.session';
 const ANALYTICS_STORAGE_KEY = 'sanctum.creator.onboarding.analytics';
+const MAX_ANALYTICS_EVENTS = 100;
 
 function isValidSlug(slug: string): boolean {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
@@ -55,8 +56,12 @@ async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  const hashArray = new Uint8Array(hashBuffer);
+  let hex = '';
+  for (let i = 0; i < hashArray.length; i++) {
+    hex += hashArray[i].toString(16).padStart(2, '0');
+  }
+  return hex;
 }
 
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
@@ -222,7 +227,14 @@ export default function DashboardPage() {
         safeEvents = [];
       }
     }
-    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify([...safeEvents, event]));
+    
+    // Add new event and limit size to prevent unbounded growth
+    safeEvents.push(event);
+    if (safeEvents.length > MAX_ANALYTICS_EVENTS) {
+      safeEvents = safeEvents.slice(-MAX_ANALYTICS_EVENTS);
+    }
+    
+    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify(safeEvents));
 
     const { dataLayer } = window as Window & { dataLayer?: unknown[] };
     if (Array.isArray(dataLayer)) {

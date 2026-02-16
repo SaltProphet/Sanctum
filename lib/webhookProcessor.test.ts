@@ -126,3 +126,30 @@ test('out-of-order events do not corrupt state machine', () => {
     verificationUpdatedAt: 300,
   });
 });
+
+test('creator state map stays bounded under high load', () => {
+  resetWebhookState();
+  
+  // Add more than MAX_CREATOR_STATE_SIZE (5000) entries
+  // This simulates high webhook volume
+  for (let i = 0; i < 5100; i++) {
+    applyWebhookEvent({
+      creatorId: `creator-${i}`,
+      provider: 'veriff',
+      state: 'verified',
+      occurredAt: Date.now(),
+    });
+  }
+  
+  // Verify early creators were evicted and state is bounded
+  const state1 = getCreatorState('creator-0');
+  const state50 = getCreatorState('creator-50');
+  const state5099 = getCreatorState('creator-5099');
+  
+  // Early creators should be evicted (default state returned)
+  assert.equal(state1.verificationState, 'unverified');
+  assert.equal(state50.verificationState, 'unverified');
+  
+  // Recent creators should still exist
+  assert.equal(state5099.verificationState, 'verified');
+});

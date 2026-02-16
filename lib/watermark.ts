@@ -1,3 +1,5 @@
+import { createHmac } from 'crypto';
+
 export type CreatorTier = 'burner' | 'professional' | 'empire';
 
 export type BrandingWatermark =
@@ -53,18 +55,36 @@ function getHashSecret() {
   return process.env.WATERMARK_HASH_SECRET || process.env.DAILY_API_KEY || 'sanctum-dev-secret';
 }
 
-function computeHmacHash(value: string): string {
-  const input = `${getHashSecret()}:${value}`;
-  let hashA = 5381;
-  let hashB = 52711;
+// Cache for hash computations to avoid redundant calculations
+const hashCache = new Map<string, string>();
+const MAX_HASH_CACHE_SIZE = 1000;
 
-  for (let index = 0; index < input.length; index += 1) {
-    const code = input.charCodeAt(index);
-    hashA = (hashA * 33) ^ code;
-    hashB = (hashB * 31) ^ (code << 1);
+function computeHmacHash(value: string): string {
+  // Check cache first
+  const cached = hashCache.get(value);
+  if (cached) {
+    // Move to end for true LRU (delete and re-insert on access)
+    hashCache.delete(value);
+    hashCache.set(value, cached);
+    return cached;
   }
 
-  return `${(hashA >>> 0).toString(16).padStart(8, '0')}${(hashB >>> 0).toString(16).padStart(8, '0')}`.repeat(4);
+  // Use native Node.js crypto HMAC-SHA256
+  // watermark.ts is only used server-side (API routes, middleware, server components)
+  const hash = createHmac('sha256', getHashSecret())
+    .update(value)
+    .digest('hex');
+
+  // Store in cache with FIFO eviction when at capacity
+  hashCache.set(value, hash);
+  if (hashCache.size > MAX_HASH_CACHE_SIZE) {
+    const firstKey = hashCache.keys().next().value;
+    if (firstKey !== undefined) {
+      hashCache.delete(firstKey);
+    }
+  }
+
+  return hash;
 }
 
 function isValidIpv4(value: string): boolean {
